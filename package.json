@@ -1,9 +1,9 @@
 {
-  "name": "ctagsx",
-  "displayName": "ctagsx",
+  "name": "ctagsx-c-cpp",
+  "displayName": "ctagsx-c-cpp",
   "description": "A fast, cross-platform and working ctags implementation",
   "version": "1.2.1",
-  "publisher": "jtanx",
+  "publisher": "zxc",
   "icon": "img/logo.png",
   "engines": {
     "vscode": "^1.63.2"
