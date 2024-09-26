@@ -5,7 +5,9 @@ A working cross-platform ctags implementation.
 ctagsx requires a tags file to work. This may be generated using [Exuberant Ctags](http://ctags.sourceforge.net). To generate the tags file, a suggested run is:
 
 ```
+D:\work\Software\ctags-v6.1.0-x64\ctags.exe --tag-relative -R --c++-kinds=+p --fields=+iaS --extras=+q .
 ctags --tag-relative --extra=f -R .
+D:\work\Software\ctags-v6.1.0-x64\ctags.exe  --tag-relative --extras=+f -R .
 ```
 
 This will generate a file called `tags`. This may be placed in the same folder as the source file being edited, or any of its parent directories. ctagsx will search and use the tags file that is closest to the source file. The tags file may be named either `tags` or `.tags`.
@@ -31,6 +33,7 @@ Separate to this, ctagsx also provides another searching mechanism; to search fo
 
 ## Todo List
 * [√]fix : If the navigated-to line contains multiple occurrences of the tag name, the cursor is only placed at the first occurrence
+* []fix: when ctrl + click, the cursor is placed at the first occurrence of the tag name, and at this time the click is not done, but the goto definition is executed.
 
 ## Release Notes
 Please refer to the [changelog](CHANGELOG.md).
