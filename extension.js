@@ -248,6 +248,7 @@ function getLineNumberPattern(entry, canceller) {
     }
 
     let lineNumber = 0
+    let recordLineNumber = 0
     let charPos = 0
     let found
     return eachLine(entry.file, line => {
@@ -256,7 +257,9 @@ function getLineNumberPattern(entry, canceller) {
             found = true
             charPos = Math.max(line.indexOf(entry.name), 0)
             console.log(`ctagsx: Found '${pattern}' at ${lineNumber}:${charPos}`)
-            return false
+            /* If there are two in a file, the first may be declaration, the second may be definition. Need to record the line number of the last one. */ 
+            recordLineNumber = lineNumber
+            // return false 
         } else if (canceller && canceller.isCancellationRequested) {
             console.log('ctagsx: Cancelled pattern searching')
             return false
@@ -264,7 +267,7 @@ function getLineNumberPattern(entry, canceller) {
     })
         .then(() => {
             if (found) {
-                return new vscode.Selection(lineNumber - 1, charPos, lineNumber - 1, charPos)
+                return new vscode.Selection(recordLineNumber - 1, charPos, recordLineNumber - 1, charPos)
             }
         })
 }
