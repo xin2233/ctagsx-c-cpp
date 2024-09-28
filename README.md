@@ -29,7 +29,7 @@ Please report any issues to https://github.com/jtanx/ctagsx/issues
 
 * It is assumed that tags files are sorted, as ctagsx will only perform a binary search on the tags file. If the file is not sorted, then it may generate incorrect results.
 * Use while editing very large files may not be supported, due to [limitations](https://github.com/Microsoft/vscode/issues/3147) of Visual Studio Code.
-* If the navigated-to line contains multiple occurrences of the tag name, the cursor is only placed at the first occurrence.
+* [fix]If the navigated-to line contains multiple occurrences of the tag name, the cursor is only placed at the first occurrence.
 
 ## Release Notes
 Please refer to the [changelog](CHANGELOG.md).
