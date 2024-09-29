@@ -18,7 +18,7 @@ function activate(context) {
     disposable = vscode.commands.registerCommand('extension.findCTagsPrompt', () => findCTagsFromPrompt(context))
     // 将命令添加到插件上下文中
     context.subscriptions.push(disposable)
-    
+
     disposable = vscode.commands.registerCommand('extension.ctagsJumpBack', () => jumpBack(context))
     context.subscriptions.push(disposable)
 
@@ -28,13 +28,13 @@ function activate(context) {
     disposable = vscode.commands.registerCommand('extension.createTerminal', createTerminal)
     context.subscriptions.push(disposable)
 
-// 检查是否禁用了定义提供程序
-if (!vscode.workspace.getConfiguration('ctagsx').get('disableDefinitionProvider')) {
-    // 注册定义提供程序，匹配所有文件
-    disposable = vscode.languages.registerDefinitionProvider({ pattern: '**/*' }, { provideDefinition });
-    // 将定义提供程序添加到上下文的订阅中，以便在扩展被禁用时可以清理
-    context.subscriptions.push(disposable);
-}
+    // 检查是否禁用了定义提供程序
+    if (!vscode.workspace.getConfiguration('ctagsx').get('disableDefinitionProvider')) {
+        // 注册定义提供程序，匹配所有文件
+        disposable = vscode.languages.registerDefinitionProvider({ pattern: '**/*' }, { provideDefinition });
+        // 将定义提供程序添加到上下文的订阅中，以便在扩展被禁用时可以清理
+        context.subscriptions.push(disposable);
+    }
 }
 exports.activate = activate
 
@@ -106,11 +106,12 @@ function findCTags(context, tag) {
                 tag.description = tag.tagKind || ''
                 tag.label = tag.file
                 tag.detail = tag.address.pattern || `Line ${tag.address.lineNumber}`
-                console.log(`tag.detail "${tag.detail}" in path "${searchPath}"...`);
-                console.log(`tag.label "${tag.detail}" in path "${searchPath}"...`);
-                console.log(`tag.address.lineNumber "${tag.address.lineNumber}" in path "${searchPath}"...`);
-                console.log(`tag.tagKind "${tag.tagKind}" in path "${searchPath}"...`);
-                console.log(`tag.address.pattern  "${tag.address.pattern }" in path "${searchPath}"...`);
+                console.log(`tag :`, tag)
+                // console.log(`tag.detail "${tag.detail}" in path "${searchPath}"...`);
+                // console.log(`tag.label "${tag.detail}" in path "${searchPath}"...`);
+                // console.log(`tag.address.lineNumber "${tag.address.lineNumber}" in path "${searchPath}"...`);
+                // console.log(`tag.tagKind "${tag.tagKind}" in path "${searchPath}"...`);
+                // console.log(`tag.address.pattern  "${tag.address.pattern}" in path "${searchPath}"...`);
                 delete tag.kind // #20 -> avoid conflict with QuickPickItem
                 return tag
             })
@@ -197,13 +198,14 @@ function provideDefinition(document, position, canceller) {
                     return
                 }
                 // 获取标签在文档中的位置
-                return getLineNumber(item, document, range, canceller).then(sel => {
-                    // 如果获取到了位置
-                    if (sel) {
-                        // 将位置添加到结果中
-                        results.push(new vscode.Location(vscode.Uri.file(item.file), sel.start))
-                    }
-                })
+                return getLineNumber(item, document, range, canceller)
+                    .then(sel => {
+                        // 如果获取到了位置
+                        if (sel) {
+                            // 将位置添加到结果中
+                            results.push(new vscode.Location(vscode.Uri.file(item.file), sel.start))
+                        }
+                    })
             }).then(() => {
                 // 返回结果
                 return results
@@ -423,8 +425,8 @@ function getLineNumber(entry, document, sel, canceller) {
         }
     }
 
-    // 否则，直接返回条目的行号
     const lineNumber = Math.max(0, entry.address.lineNumber - 1)
+    // 最后，返回条目的行号
     return Promise.resolve(new vscode.Selection(lineNumber, 0, lineNumber, 0))
 }
 
@@ -453,7 +455,7 @@ function openAndReveal(context, editor, document, sel, doSaveState) {
             preview: vscode.workspace.getConfiguration('ctagsx').get('openAsPreview'),
             selection: sel
         }
-         // 显示文档
+        // 显示文档
         return vscode.window.showTextDocument(doc, showOptions)
     })
 }
@@ -478,8 +480,9 @@ function revealCTags(context, editor, entry) {
     const triggeredSel = editor ? editor.selection : null
 
     // 获取条目的行号
-    return getLineNumber(entry, document, triggeredSel).then(sel => {
-        // 打开并显示条目的文档和选择
-        return openAndReveal(context, editor, entry.file, sel, true)
-    })
+    return getLineNumber(entry, document, triggeredSel)
+        .then(sel => {
+            // 打开并显示条目的文档和选择
+            return openAndReveal(context, editor, entry.file, sel, true)
+        })
 }
