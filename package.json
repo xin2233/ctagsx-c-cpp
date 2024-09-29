@@ -62,6 +62,10 @@
       {
         "command": "extension.createTerminal",
         "title": "ctagsx: Create a terminal in the workspace of the active document"
+      },
+      {
+        "command": "extension.genCtags",
+        "title": "ctagsx: generate Ctags file in the workspace of the active document"
       }
     ],
     "keybindings": [

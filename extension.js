@@ -4,6 +4,7 @@ const path = require('path')
 const Promise = require('bluebird')
 const vscode = require('vscode')
 const eachLine = Promise.promisify(lineReader.eachLine)
+const { exec } = require('child_process');
 
 // Called when the plugin is first activated
 function activate(context) {
@@ -28,6 +29,10 @@ function activate(context) {
     disposable = vscode.commands.registerCommand('extension.createTerminal', createTerminal)
     context.subscriptions.push(disposable)
 
+    // 添加命令，用于执行生成ctags命令
+    disposable = vscode.commands.registerCommand('extension.genCtags', generateCTags)
+    context.subscriptions.push(disposable)
+
     // 检查是否禁用了定义提供程序
     if (!vscode.workspace.getConfiguration('ctagsx').get('disableDefinitionProvider')) {
         // 注册定义提供程序，匹配所有文件
@@ -43,6 +48,39 @@ function deactivate() {
     console.log('ctagsx is tombstoned')
 }
 exports.deactivate = deactivate
+
+function generateCTags() {
+    // 获取当前工作区
+    const workspaceFolder = vscode.workspace.workspaceFolders[0];
+    if (!workspaceFolder) {
+        vscode.window.showErrorMessage('No workspace folder found.');
+        return;
+    }
+
+    // 获取当前工作区的根路径
+    const rootPath = workspaceFolder.uri.fsPath;
+
+    // 执行 shell 命令
+    let command
+    if (os.platform() === 'win32') {
+        // Windows 系统的命令
+        command = 'ctags.exe --tag-relative --extra=f -R .';
+    } else {
+        // Linux 和 macOS 系统的命令
+        command = 'ctags --tag-relative --extra=f -R .';
+    }
+    // const command = `ctags --tag-relative --extras=+f -R .`;
+    exec(command, { cwd: rootPath }, (error, stdout, stderr) => {
+        if (error) {
+            vscode.window.showErrorMessage(`Error running ctags: `, error.message);
+            return;
+        }
+        if (stderr) {
+            vscode.window.showWarningMessage(`Warning running ctags: `,stderr);
+        }
+        vscode.window.showInformationMessage(`ctags completed successfully.`);
+    });
+}
 
 function createTerminal() {
     vscode.window.createTerminal().show()
@@ -272,7 +310,7 @@ function getTag(editor) {
 }
 
 /**
- * 获取标签在文档中的位置
+ * tags中没有行号，则根据选中的pattern来查询具体的行号
  * @param {*} entry 
  * @param {*} canceller 
  * @returns {Promise<vscode.Selection>} - 标签位置
@@ -418,15 +456,16 @@ function getLineNumber(entry, document, sel, canceller) {
         return getLineNumberPattern(entry, canceller)
     }
 
-    // 如果条目的类型是函数，并且当前文档存在，则获取文件行号
+    // 如果entry 中number不是， 同时，如果条目的类型是函数，并且当前文档存在，则获取文件行号
     if (entry.tagKind === 'F') {
         if (document) {
             return getFileLineNumber(document, sel)
         }
     }
 
+    // 如果条目的行号大于0，也不是函数，则获取行号
     const lineNumber = Math.max(0, entry.address.lineNumber - 1)
-    // 最后，返回条目的行号
+    // 最后并返回 selection
     return Promise.resolve(new vscode.Selection(lineNumber, 0, lineNumber, 0))
 }
 
