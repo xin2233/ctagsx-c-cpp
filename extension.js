@@ -3,7 +3,7 @@ const lineReader = require('line-reader')
 const path = require('path')
 const Promise = require('bluebird')
 const vscode = require('vscode')
-const eachLine = Promise.promisify(lineReader.eachLine)
+const eachLine = Promise.promisify(lineReader.eachLine)  // 将line-reader的eachLine函数转化为Promise版本
 const { exec } = require('child_process');
 
 // Called when the plugin is first activated
@@ -91,11 +91,12 @@ function findCTagsFromPrompt(context) {
         'prompt': 'Enter a tag to search for'
     }
     // TODO: Provide completion (jtanx/ctagz#2)
-    return vscode.window.showInputBox(options).then(tag => {
-        if (!tag) {
-            return
-        }
-        return findCTags(context, tag)
+    return vscode.window.showInputBox(options)
+        .then(tag => {
+            if (!tag) {
+                return
+            }
+            return findCTags(context, tag)
     })
 }
 
@@ -145,11 +146,6 @@ function findCTags(context, tag) {
                 tag.label = tag.file
                 tag.detail = tag.address.pattern || `Line ${tag.address.lineNumber}`
                 console.log(`tag :`, tag)
-                // console.log(`tag.detail "${tag.detail}" in path "${searchPath}"...`);
-                // console.log(`tag.label "${tag.detail}" in path "${searchPath}"...`);
-                // console.log(`tag.address.lineNumber "${tag.address.lineNumber}" in path "${searchPath}"...`);
-                // console.log(`tag.tagKind "${tag.tagKind}" in path "${searchPath}"...`);
-                // console.log(`tag.address.pattern  "${tag.address.pattern}" in path "${searchPath}"...`);
                 delete tag.kind // #20 -> avoid conflict with QuickPickItem
                 return tag
             })
@@ -160,8 +156,10 @@ function findCTags(context, tag) {
                 }
                 return vscode.window.showInformationMessage(`ctagsx-c-cpp: No tags found for ${tag}`)
             } else if (options.length === 1) {
+                // 如果tags文件中命中一个entry，则需要去判断是否是函数定义，如果是函数定义，则跳转到函数定义处，否则跳转到声明处
                 return revealCTags(context, editor, options[0])
             } else {
+                // 如果tags文件中，有多个entry命中，则显示一个QuickPick供用户选择
                 return vscode.window.showQuickPick(options).then(opt => {
                     return revealCTags(context, editor, opt)
                 })
@@ -235,7 +233,7 @@ function provideDefinition(document, position, canceller) {
                 if (canceller.isCancellationRequested) {
                     return
                 }
-                // 获取标签在文档中的位置
+                // 获取标签在文档中的位置，可能有多个位置，都添加到结果中
                 return getLineNumber(item, document, range, canceller)
                     .then(sel => {
                         // 如果获取到了位置
@@ -379,7 +377,7 @@ async function getLineNumberPattern(entry, canceller) {
                     lineNumber = selection.line;
                     charPos = selection.charPos;
                     console.log(`ctagsx-c-cpp: index ${index} Selected line ${lineNumber} at ${charPos}`);
-                    return new vscode.Selection(lineNumber - 1, charPos, lineNumber - 1, charPos);
+                    return Promise.resolve(new vscode.Selection(lineNumber - 1, charPos, lineNumber - 1, charPos));
                 }
             } catch (err) {
                 // 如果出现错误，则显示错误信息
@@ -392,7 +390,7 @@ async function getLineNumberPattern(entry, canceller) {
             // 直接return
             lineNumber = found_lines[0];
             charPos = foundCharPos[0];
-            return new vscode.Selection(lineNumber - 1, charPos, lineNumber - 1, charPos)
+            return Promise.resolve(new vscode.Selection(lineNumber - 1, charPos, lineNumber - 1, charPos))
         }
     }
 }
@@ -456,7 +454,7 @@ function getLineNumber(entry, document, sel, canceller) {
         return getLineNumberPattern(entry, canceller)
     }
 
-    // 如果entry 中number不是， 同时，如果条目的类型是函数，并且当前文档存在，则获取文件行号
+    // 如果entry 中number不是0， 同时，如果条目的类型是函数，并且当前文档存在，则获取文件行号
     if (entry.tagKind === 'F') {
         if (document) {
             return getFileLineNumber(document, sel)
