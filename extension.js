@@ -8,7 +8,7 @@ const { exec } = require('child_process');
 
 // Called when the plugin is first activated
 function activate(context) {
-    console.log('ctagsx is live')
+    console.log('ctags is live')
 
     // 注册命令，用于在当前文档中查找CTags
     let disposable = vscode.commands.registerCommand('extension.findCTags', () => findCTagsInDocument(context))
@@ -30,7 +30,7 @@ function activate(context) {
     context.subscriptions.push(disposable)
 
     // 添加命令，用于执行生成ctags命令
-    disposable = vscode.commands.registerCommand('extension.genCtags', generateCTags)
+    disposable = vscode.commands.registerCommand('extension.genCtags', () => generateCTags)
     context.subscriptions.push(disposable)
 
     // 检查是否禁用了定义提供程序
@@ -45,7 +45,7 @@ exports.activate = activate
 
 // Called when the plugin is deactivated
 function deactivate() {
-    console.log('ctagsx is tombstoned')
+    console.log('ctags is deactivated')
 }
 exports.deactivate = deactivate
 
@@ -76,7 +76,7 @@ function generateCTags() {
             return;
         }
         if (stderr) {
-            vscode.window.showWarningMessage(`Warning running ctags: `,stderr);
+            vscode.window.showWarningMessage(`Warning running ctags: `, stderr);
         }
         vscode.window.showInformationMessage(`ctags completed successfully.`);
     });
@@ -97,13 +97,18 @@ function findCTagsFromPrompt(context) {
                 return
             }
             return findCTags(context, tag)
-    })
+        })
 }
 
+/**
+ * Find ctags for a tag in the current document, CTRL+T
+ * @param {*} context vscode extension context
+ * @returns {Promise} 
+ */
 function findCTagsInDocument(context) {
     const editor = vscode.window.activeTextEditor
     if (!editor) {
-        console.log('ctagsx-c-cpp: Cannot search - no active editor (file too large? https://github.com/Microsoft/vscode/issues/3147)')
+        console.log('ctags: Cannot search - no active editor (file too large? https://github.com/Microsoft/vscode/issues/3147)')
         return
     }
 
@@ -115,6 +120,12 @@ function findCTagsInDocument(context) {
     return findCTags(context, tag)
 }
 
+/**
+ * Find ctags for a tag, CTRL+T
+ * @param {*} context vscode extension context
+ * @param {*} tag ctags file
+ * @returns 
+ */
 function findCTags(context, tag) {
     const editor = vscode.window.activeTextEditor
     let searchPath = vscode.workspace.rootPath
@@ -124,15 +135,15 @@ function findCTags(context, tag) {
     }
 
     if (!searchPath) {
-        console.log('ctagsx-c-cpp: Could not get a path to search for tags file')
+        console.log('ctags: Could not get a path to search for tags file')
         if (editor) {
-            console.log('ctagsx-c-cpp: Document is untitled? ', editor.document.isUntitled)
-            console.log('ctagsx-c-cpp: Document URI:', editor.document.uri.toString())
+            console.log('ctags: Document is untitled? ', editor.document.isUntitled)
+            console.log('ctags: Document URI:', editor.document.uri.toString())
         } else {
-            console.log('ctagsx-c-cpp: Active text editor is undefined')
+            console.log('ctags: Active text editor is undefined')
         }
-        console.log('ctagsx-c-cpp: Workspace root: ', vscode.workspace.rootPath)
-        return vscode.window.showWarningMessage(`ctagsx-c-cpp: No searchable path (no workspace folder open?)`)
+        console.log('ctags: Workspace root: ', vscode.workspace.rootPath)
+        return vscode.window.showWarningMessage(`ctags: No searchable path (no workspace folder open?)`)
     }
 
     ctagz.findCTagsBSearch(searchPath, tag)
@@ -152,22 +163,23 @@ function findCTags(context, tag) {
 
             if (!options.length) {
                 if (!result.tagsFile) {
-                    return vscode.window.showWarningMessage(`ctagsx-c-cpp: No tags file found`)
+                    return vscode.window.showWarningMessage(`ctags: No tags file found`)
                 }
-                return vscode.window.showInformationMessage(`ctagsx-c-cpp: No tags found for ${tag}`)
+                return vscode.window.showInformationMessage(`ctags: No tags found for ${tag}`)
             } else if (options.length === 1) {
                 // 如果tags文件中命中一个entry，则需要去判断是否是函数定义，如果是函数定义，则跳转到函数定义处，否则跳转到声明处
                 return revealCTags(context, editor, options[0])
             } else {
                 // 如果tags文件中，有多个entry命中，则显示一个QuickPick供用户选择
-                return vscode.window.showQuickPick(options).then(opt => {
-                    return revealCTags(context, editor, opt)
-                })
+                return vscode.window.showQuickPick(options)
+                    .then(opt => {
+                        return revealCTags(context, editor, opt)
+                    })
             }
         })
         .catch(err => {
             console.log(err.stack)
-            vscode.window.showErrorMessage(`ctagsx-c-cpp: Search failed: ${err}`)
+            vscode.window.showErrorMessage(`ctags: Search failed: ${err}`)
         })
 }
 
@@ -181,7 +193,7 @@ function findCTags(context, tag) {
 function provideDefinition(document, position, canceller) {
     // 检查文档是否未保存或非本地文档
     if (document.isUntitled || document.uri.scheme !== 'file') {
-        console.log('ctagsx-c-cpp: Cannot provide definitions for untitled (unsaved) and/or non-local (non file://) documents')
+        console.log('ctags: Cannot provide definitions for untitled (unsaved) and/or non-local (non file://) documents')
         return Promise.reject()
     }
 
@@ -200,14 +212,14 @@ function provideDefinition(document, position, canceller) {
         range = document.getWordRangeAtPosition(position)
         // 如果没有获取到单词范围
         if (!range) {
-            console.log('ctagsx-c-cpp: Cannot provide definition without a valid tag (word range)')
+            console.log('ctags: Cannot provide definition without a valid tag (word range)')
             return Promise.reject()
         }
         // 获取光标所在位置的单词作为标签
         tag = document.getText(range)
         // 如果标签为空
         if (!tag) {
-            console.log('ctagsx-c-cpp: Cannot provide definition with an empty tag')
+            console.log('ctags: Cannot provide definition with an empty tag')
             return Promise.reject()
         }
     }
@@ -235,11 +247,14 @@ function provideDefinition(document, position, canceller) {
                 }
                 // 获取标签在文档中的位置，可能有多个位置，都添加到结果中
                 return getLineNumber(item, document, range, canceller)
-                    .then(sel => {
-                        // 如果获取到了位置
-                        if (sel) {
-                            // 将位置添加到结果中
-                            results.push(new vscode.Location(vscode.Uri.file(item.file), sel.start))
+                    .then(selections => {
+                        // 处理返回的selections数组
+                        if (Array.isArray(selections)) {
+                            selections.forEach(sel => {
+                                // 将位置添加到结果中
+                                console.log(`provideDefinitio - sel:\n`, sel)
+                                results.push(new vscode.Location(vscode.Uri.file(item.file), sel.start))
+                            })
                         }
                     })
             }).then(() => {
@@ -252,16 +267,21 @@ function provideDefinition(document, position, canceller) {
         })
 }
 
-
+/**
+ * ALT+T
+ * @param {*} context 
+ * @returns 
+ */
 function jumpBack(context) {
     const stack = context.workspaceState.get('CTAGSX_JUMP_STACK', [])
     if (stack.length > 0) {
         const position = stack.pop()
-        return context.workspaceState.update('CTAGSX_JUMP_STACK', stack).then(() => {
-            const uri = vscode.Uri.parse(position.uri)
-            const sel = new vscode.Selection(position.lineNumber, position.charPos, position.lineNumber, position.charPos)
-            return openAndReveal(context, vscode.window.activeTextEditor, uri, sel)
-        })
+        return context.workspaceState.update('CTAGSX_JUMP_STACK', stack)
+            .then(() => {
+                const uri = vscode.Uri.parse(position.uri)
+                const sel = new vscode.Selection(position.lineNumber, position.charPos, position.lineNumber, position.charPos)
+                return openAndReveal(context, vscode.window.activeTextEditor, uri, sel)
+            })
     }
 }
 
@@ -269,6 +289,12 @@ function clearJumpStack(context) {
     return context.workspaceState.update('CTAGSX_JUMP_STACK', [])
 }
 
+/**
+ * @description 保存当前编辑器的位置
+ * @param {*} context 
+ * @param {*} editor 
+ * @returns 
+ */
 function saveState(context, editor) {
     if (!editor) {
         // Can happen on manual entry with no editor open
@@ -291,7 +317,7 @@ function saveState(context, editor) {
         }
     }
     stack.push(currentPosition)
-    console.log('ctagsx-c-cpp: Jump stack:', stack)
+    console.log('ctags: Jump stack:', stack)
 
     return context.workspaceState.update('CTAGSX_JUMP_STACK', stack)
 }
@@ -311,7 +337,8 @@ function getTag(editor) {
  * tags中没有行号，则根据选中的pattern来查询具体的行号
  * @param {*} entry 
  * @param {*} canceller 
- * @returns {Promise<vscode.Selection>} - 标签位置
+ * @returns {Promise} 返回一个Promise对象，表示操作完成。resolve ：一个 数组，包含 vscode.Selection 对象，表示文件行号。 
+ * async声明的函数的返回本质上是一个Promise。就是说你只要声明了这个函数是async，那么内部不管你怎么处理，它的返回肯定是个Promise。
  */
 async function getLineNumberPattern(entry, canceller) {
     let matchWhole = false
@@ -319,7 +346,7 @@ async function getLineNumberPattern(entry, canceller) {
     if (pattern.startsWith("^")) {
         pattern = pattern.substring(1, pattern.length)
     } else {
-        console.error(`ctagsx-c-cpp: Unsupported pattern ${pattern}`)
+        console.error(`ctags: Unsupported pattern ${pattern}`)
         return Promise.resolve(0)
     }
 
@@ -329,69 +356,56 @@ async function getLineNumberPattern(entry, canceller) {
     }
 
     let found = 0; // 如果找到了，就 = true
-    let lineNumber = 0; // 遍历的行数
+    let lineNumber = 0; // 遍历文件的行数
     let charPos = 0;
     const found_lines = []; // 存放找到的行
     const foundCharPos = []; // 存放找到的字符位置
+
+    /* 是用await声明的Promise异步返回，必须“等待”到有返回值的时候，代码才继续执行下去，
+       请记住await是在等待一个Promise的异步返回 */
     await eachLine(entry.file, line => {
         lineNumber += 1;
         if ((matchWhole && line === pattern) || line.startsWith(pattern)) {
             found = true;
             charPos = Math.max(line.indexOf(entry.name), 0);
-            console.log(`ctagsx-c-cpp: Found '${pattern}' at ${lineNumber}:${charPos}`);
-            // return false  // 遍历所有行了，找到了，也不return
+            console.log(`ctags: Found '${pattern}' at ${lineNumber}:${charPos}`);
             found_lines.push(lineNumber);  // 存放找到的行
             foundCharPos.push(charPos);  // 存放找到的字符位置
         } else if (canceller && canceller.isCancellationRequested) {
-            console.log('ctagsx-c-cpp: Cancelled pattern searching')
-            return false
+            console.log('ctags: Cancelled pattern searching')
+            return false  // 实际上返回的是promise.reject， 直接退出了promise 状态
         }
     })
-
-    // 找到了
-    if (found) {
+    if (found) { // 找到了
+        // 存放找到的tag在这个文件的vscode.Selection
+        const selections = []
         // 判断存放的行数是否为0
         if (found_lines.length === 0) {
             // 此时代码有是逻辑错误
-            console.log('ctagsx-c-cpp: Error: found_lines.length === 0');
+            console.log('ctags: Error: found_lines.length === 0');
             // 如果为0,则显示一个提示框，告诉用户没有找到
-            vscode.window.showInformationMessage(`ctagsx-c-cpp: No match found for '${pattern}'`);
+            vscode.window.showInformationMessage(`ctags: No match found for '${pattern}'`);
         }
-        // 判断存放的行数是否大于1
-        if (found_lines.length > 1) {
-            // 如果大于1,则显示一个选择框，让用户选择要跳转的行
-            // 创建一个对象，可以传递给 showQuickPick 函数当参数，用于显示一个选择框
-            const quickPickItems = found_lines.map((line, index) => ({
-                label: `${line}`,
-                description: `${pattern} Line ${line} at ${foundCharPos[index]}`,
-                line: line,
-                charPos: foundCharPos[index]
-            }))
-            try {
-                const selection = await vscode.window.showQuickPick(quickPickItems);
-                if (selection) {
-                    // 打印 linnumber 和 charPos
-                    console.log(`ctagsx-c-cpp: Selected line ${selection.line} at ${selection.charPos}`);
-                    console.log(`ctagsx-c-cpp: selection ${selection}`);
-                    const index = found_lines.indexOf(selection.label);
-                    lineNumber = selection.line;
-                    charPos = selection.charPos;
-                    console.log(`ctagsx-c-cpp: index ${index} Selected line ${lineNumber} at ${charPos}`);
-                    return Promise.resolve(new vscode.Selection(lineNumber - 1, charPos, lineNumber - 1, charPos));
-                }
-            } catch (err) {
-                // 如果出现错误，则显示错误信息
-                console.log(err.stack);
-                vscode.window.showErrorMessage(`ctagsx: Search failed: ${err.message || err}`);
-            }
+        else {
+            // 如果找到的entry 大于1，则每个entry都返回一个selection
+
+            /* 
+            map() 方法创建一个新数组，其结果是该数组中的每个元素是调用一次提供的函数后的返回值。
+            array.map((item,index,arr)=>{
+                //item是操作的当前元素
+                //index是操作元素的下表
+                //arr是需要被操作的元素
+                //具体需要哪些参数 就传入那个
+            })
+            */
+            found_lines.map((line, index) => {
+                console.log(`c: Found '${pattern}' at ${line}:${foundCharPos[index]}`);
+                selections.push(new vscode.Selection(line - 1, foundCharPos[index], line - 1, foundCharPos[index]))
+            })
+            console.log(`c: getLineNumberPattern selections : `, selections);
         }
-        // 如果存放的行数等于1
-        if (found_lines.length === 1) {
-            // 直接return
-            lineNumber = found_lines[0];
-            charPos = foundCharPos[0];
-            return Promise.resolve(new vscode.Selection(lineNumber - 1, charPos, lineNumber - 1, charPos))
-        }
+
+        return selections
     }
 }
 
@@ -402,9 +416,11 @@ async function getLineNumberPattern(entry, canceller) {
  * @param {Object} document - 当前文档对象。
  * @param {Object} sel - 当前选择对象。
  * 
- * @returns {Promise} - 返回一个Promise对象，表示操作完成。
+ * @returns {Promise} - 返回一个Promise对象，表示操作完成。resolve ：一个 数组，包含 vscode.Selection 对象，表示文件行号。
  */
 function getFileLineNumber(document, sel) {
+    // 存储 所有的vscode seclection 对象
+    const selections = []
     // 获取当前光标位置
     let pos = sel.end.translate(0, 1)
     // 获取光标位置的单词范围
@@ -428,9 +444,10 @@ function getFileLineNumber(document, sel) {
                     charPos = Math.max(0, parseInt(text) - 1)
                 }
             }
-            console.log(`ctagsx-c-cpp: Resolved file position to line ${lineNumber + 1}, char ${charPos + 1}`)
-            // 返回行号和字符位置
-            return Promise.resolve(new vscode.Selection(lineNumber, charPos, lineNumber, charPos))
+            console.log(`ctags: Resolved file position to line ${lineNumber + 1}, char ${charPos + 1}`)
+            selections.push(new vscode.Selection(lineNumber, charPos, lineNumber, charPos))
+            // 返回行号和字符位置 的数组
+            return Promise.resolve(selections)
         }
     }
     // 如果没有找到行号和字符位置，则返回空Promise
@@ -446,16 +463,14 @@ function getFileLineNumber(document, sel) {
  * @param {Object} sel - 当前选择对象。
  * @param {Object} canceller - 取消器对象。
  * 
- * @returns {Promise} - 返回一个Promise对象，表示操作完成。
+ * @returns {Promise} - 返回一个Promise对象，表示操作完成。resolve ：一个 数组，包含 vscode.Selection 对象，用来表示文件行号
  */
 function getLineNumber(entry, document, sel, canceller) {
     // 如果条目的行号为0，则使用正则表达式模式获取行号
     if (entry.address.lineNumber === 0) {
         return getLineNumberPattern(entry, canceller)
-    }
-
-    // 如果entry 中number不是0， 同时，如果条目的类型是函数，并且当前文档存在，则获取文件行号
-    if (entry.tagKind === 'F') {
+    } else if (entry.tagKind === 'F') {
+        // 如果entry 中number不是0， 同时，如果条目的类型是函数，并且当前文档存在，则获取文件行号
         if (document) {
             return getFileLineNumber(document, sel)
         }
@@ -463,8 +478,9 @@ function getLineNumber(entry, document, sel, canceller) {
 
     // 如果条目的行号大于0，也不是函数，则获取行号
     const lineNumber = Math.max(0, entry.address.lineNumber - 1)
-    // 最后并返回 selection
-    return Promise.resolve(new vscode.Selection(lineNumber, 0, lineNumber, 0))
+    // 最后并返回 selections数组
+    const selections = [new vscode.Selection(lineNumber, 0, lineNumber, 0)]
+    return Promise.resolve(selections)
 }
 
 
@@ -477,34 +493,39 @@ function getLineNumber(entry, document, sel, canceller) {
  * @param {Object} sel - 要显示的选择对象。
  * @param {boolean} doSaveState - 是否保存当前编辑器的状态。
  * 
- * @returns {Promise} - 返回一个Promise对象，表示操作完成。
+ * @returns {Promise} - 返回一个Promise对象，表示操作完成。vscode.window.showTextDocument(doc, showOptions)
+ * resolve to an editor
  */
 function openAndReveal(context, editor, document, sel, doSaveState) {
     // 如果需要保存当前编辑器的状态，则先保存状态
     if (doSaveState) {
-        return saveState(context, editor).then(() => openAndReveal(context, editor, document, sel))
+        return saveState(context, editor)
+            .then(() => {
+                openAndReveal(context, editor, document, sel)
+            })
     }
     // 打开指定的文档
-    return vscode.workspace.openTextDocument(document).then(doc => {
-        // 设置显示选项
-        const showOptions = {
-            viewColumn: editor ? editor.viewColumn : vscode.ViewColumn.One,
-            preview: vscode.workspace.getConfiguration('ctagsx').get('openAsPreview'),
-            selection: sel
-        }
-        // 显示文档
-        return vscode.window.showTextDocument(doc, showOptions)
-    })
+    return vscode.workspace.openTextDocument(document)
+        .then(doc => {
+            // 设置显示选项
+            const showOptions = {
+                viewColumn: editor ? editor.viewColumn : vscode.ViewColumn.One,
+                preview: vscode.workspace.getConfiguration('ctagsx').get('openAsPreview'),
+                selection: sel
+            }
+            // 显示文档
+            return vscode.window.showTextDocument(doc, showOptions)
+        })
 }
 
 /**
- * 显示CTags条目。
+ * 显示CTags条目。 CTRL + T 快捷键
  * 
  * @param {Object} context - 插件上下文对象。
  * @param {Object} editor - 当前活动编辑器对象。
  * @param {Object} entry - 要显示的CTags条目对象。
  * 
- * @returns {Promise} - 返回一个Promise对象，表示操作完成。
+ * @returns {Promise} - 返回一个Promise对象，表示操作完成。resolve 中的参数是一个 数组，包含 vscode.Selection 对象，表示文件行号
  */
 function revealCTags(context, editor, entry) {
     // 如果没有传入条目，则直接返回
@@ -517,9 +538,24 @@ function revealCTags(context, editor, entry) {
     const triggeredSel = editor ? editor.selection : null
 
     // 获取条目的行号
-    return getLineNumber(entry, document, triggeredSel)
-        .then(sel => {
-            // 打开并显示条目的文档和选择
-            return openAndReveal(context, editor, entry.file, sel, true)
+    return getLineNumber(entry, document, triggeredSel)        
+        .then(selections => {
+            // 存储options数组
+            const options = []
+            // 处理返回的selections数组
+            if (Array.isArray(selections)) {
+                selections.forEach(sel => {
+                    // 将位置添加到options中，给用户选择
+                    const item: vscode.QuickPickItem = { label: `Go to ${entry.file}:${sel.start.line + 1}` };
+                    // const item =  vscode.QuickPickItem(`Go to ${entry.file}:${sel.start.line + 1}`)
+                    options.push(item)
+                })
+            }
+            return vscode.window.showQuickPick(options)
+                .then(option => {
+                    // 打开并显示条目的文档和选择
+                    sel = selections[options.indexOf(option)]
+                    return openAndReveal(context, editor, entry.file, sel, true)
+                })
         })
 }
