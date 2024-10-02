@@ -5,6 +5,7 @@ const Promise = require('bluebird')
 const vscode = require('vscode')
 const eachLine = Promise.promisify(lineReader.eachLine)  // 将line-reader的eachLine函数转化为Promise版本
 const { exec } = require('child_process');
+const { couldStartTrivia } = require('typescript')
 
 // Called when the plugin is first activated
 function activate(context) {
@@ -538,7 +539,7 @@ function revealCTags(context, editor, entry) {
     const triggeredSel = editor ? editor.selection : null
 
     // 获取条目的行号
-    return getLineNumber(entry, document, triggeredSel)        
+    return getLineNumber(entry, document, triggeredSel)
         .then(selections => {
             // 存储options数组
             const options = []
@@ -546,16 +547,30 @@ function revealCTags(context, editor, entry) {
             if (Array.isArray(selections)) {
                 selections.forEach(sel => {
                     // 将位置添加到options中，给用户选择
-                    const item: vscode.QuickPickItem = { label: `Go to ${entry.file}:${sel.start.line + 1}` };
-                    // const item =  vscode.QuickPickItem(`Go to ${entry.file}:${sel.start.line + 1}`)
+                    const item = { label: `Go to ${entry.file}:${sel.start.line + 1}` };
                     options.push(item)
                 })
             }
-            return vscode.window.showQuickPick(options)
-                .then(option => {
-                    // 打开并显示条目的文档和选择
-                    sel = selections[options.indexOf(option)]
-                    return openAndReveal(context, editor, entry.file, sel, true)
-                })
+
+            console.log("options, ", options)
+            // 如果只有一个选项，则直接打开并显示条目的文档和选择
+            if (options.length === 1) {
+                sel = selections[0]
+                return openAndReveal(context, editor, entry.file, sel, true)
+            } else if (options.length > 1) {
+                // 如果有多个选项，则显示快速选择
+                return vscode.window.showQuickPick(options)
+                    .then(option => {
+                        if (option) {
+                            console.log(`You selected: ${option.label}`);
+                            // 打开并显示条目的文档和选择
+                            sel = selections[options.indexOf(option)]
+                            return openAndReveal(context, editor, entry.file, sel, true)
+                        } else {
+                            /* 如果用户选择了一个项，控制台将打印出所选项的标签。如果用户取消了选择，selection 将会是 undefined */
+                            console.log('You cancelled the quick pick');
+                        }
+                    })
+            }
         })
 }
