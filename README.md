@@ -1,7 +1,7 @@
 # ctagsx-c-cpp README
 This a modification version from ctagsx. Best for c++ and c.
 
-This is original reamdme: [README.md](./README-origin.md)
+This is original README.md: [README.md](./README-origin.md)
 
 ## Features
 - [√]fix : If the navigated-to line contains multiple occurrences of the tag name, the cursor is only placed at the first occurrence

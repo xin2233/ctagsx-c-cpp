@@ -10,14 +10,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jtanx/ctagsx.git"
+    "url": "git+https://github.com/xin2233/ctagsx-c-cpp.git"
   },
-  "author": "Jeremy Tan",
+  "author": "ZXC",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/jtanx/ctagsx/issues"
+    "url": "https://github.com/xin2233/ctagsx-c-cpp/issues"
   },
-  "homepage": "https://github.com/jtanx/ctagsx",
+  "homepage": "https://github.com/xin2233/ctagsx-c-cpp",
   "categories": [
     "Other"
   ],
