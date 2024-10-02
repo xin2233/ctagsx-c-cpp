@@ -33,7 +33,7 @@ Separate to this, ctagsx also provides another searching mechanism; to search fo
 
 ## Todo List
 * [√]fix : If the navigated-to line contains multiple occurrences of the tag name, the cursor is only placed at the first occurrence
-* []fix: when ctrl + click, the cursor is placed at the first occurrence of the tag name, and at this time the click is not done, but the goto definition is executed.
+* [√]fix: when ctrl + click, the cursor is placed at the first occurrence of the tag name, and at this time the click is not done, but the goto definition is executed.
 
 ## Release Notes
 Please refer to the [changelog](CHANGELOG.md).
