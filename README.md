@@ -1,35 +1,31 @@
-# ctagsx README
-A working cross-platform ctags implementation.
+# ctagsc README
+This a modification version from [ctagsx](https://github.com/jtanx/ctagsx). Best for c++ and c.
 
-## Setup
-ctagsx requires a tags file to work. This may be generated using [Exuberant Ctags](http://ctags.sourceforge.net). To generate the tags file, a suggested run is:
-
-```
-ctags --tag-relative --extra=f -R .
-```
-
-This will generate a file called `tags`. This may be placed in the same folder as the source file being edited, or any of its parent directories. ctagsx will search and use the tags file that is closest to the source file. The tags file may be named either `tags` or `.tags`.
-
-As of version 1.0.6, ctagsx integrates directly as a definition provider (Go to definition - `F12` or `Ctrl+left click`). This feature may be optionally disabled.
-
-Separate to this, ctagsx also provides another searching mechanism; to search for a tag, press `Ctrl+t`/`Cmd+t`. To jump back to where you searched for a tag, press `Alt+t`. To manually enter the tag to jump to, press `Ctrl+alt+t`/`Cmd+alt+t`.
+This is original README.md: [README.md](./README-origin.md)
 
 ## Features
-* Is cross platform
-* Remains relatively fast even on large tags files
-* Searches tags files relative to the source file being edited
-* Bonus: Added command to create terminal in workspace of active document
+- [√]fix : If the navigated-to line contains multiple occurrences of the tag name, the cursor is only placed at the first occurrence
+- [√]fix: when ctrl + click, the cursor is placed at the first occurrence of the tag name, and at this time the click is not done, but the goto definition is executed.
+
+## Usage
+| Command | Description | keyboard shortcut |
+| --- | --- | --- |
+| `ctagsc.findCTags` | Search for a tag in the tags file | `Ctrl+T`/`Cmd+T` |
+| `ctagsc.jumpBack` | Jump back to the location of the last tag search | `Alt+T` |
+| `ctagsc.clearJumpStack` | Clear the jump stack | `Ctrl+Alt+T`/`Cmd+Alt+T` |
+| `ctagsc.createTerminal` | Create a terminal in the workspace of the active document | `Ctrl+Shift+T`/`Cmd+Shift+T` |
+| `ctagsc.findCTagsFromPrompt` | Search for a tag in the tags file from a prompt |  |
+| `ctagsc.findCTagsInDocument` | Search for a tag in the active document | |
+| `ctagsc.generateTags` | Generate a tags file for the active document |  |
+
+## Setup
+ctagsc requires a tags file to work. This may be generated using [Exuberant Ctags](http://ctags.sourceforge.net). To generate the tags file, a suggested run is:
+
+```
+ctags --tag-relative --extras=+f -R .
+```
 
 ## Extension Settings
-* `ctagsx.openAsPreview`: Controls if the navigated file will be opened in preview mode (default: `false`)
-* `ctagsx.disableDefinitionProvider`: Setting this to true prevents ctagsx from providing definitions via this interface (default: `false`).
+* `ctagsc.openAsPreview`: Controls if the navigated file will be opened in preview mode (default: `false`)
+* `ctagsc.disableDefinitionProvider`: Setting this to true prevents ctagsc from providing definitions via this interface (default: `false`).
 
-## Known Issues
-Please report any issues to https://github.com/jtanx/ctagsx/issues
-
-* It is assumed that tags files are sorted, as ctagsx will only perform a binary search on the tags file. If the file is not sorted, then it may generate incorrect results.
-* Use while editing very large files may not be supported, due to [limitations](https://github.com/Microsoft/vscode/issues/3147) of Visual Studio Code.
-* [fix]If the navigated-to line contains multiple occurrences of the tag name, the cursor is only placed at the first occurrence.
-
-## Release Notes
-Please refer to the [changelog](CHANGELOG.md).

@@ -1,23 +1,23 @@
 {
-  "name": "ctagsx",
-  "displayName": "ctagsx",
+  "name": "ctagsc",
+  "displayName": "ctagsc",
   "description": "A fast, cross-platform and working ctags implementation",
-  "version": "1.2.2",
-  "publisher": "jtanx",
+  "version": "1.0.1",
+  "publisher": "zxc",
   "icon": "img/logo.png",
   "engines": {
-    "vscode": "^1.63.2"
+    "vscode": "^1.42.2"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jtanx/ctagsx.git"
+    "url": "git+https://github.com/xin2233/ctagsx-c-cpp.git"
   },
-  "author": "Jeremy Tan",
+  "author": "ZXC",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/jtanx/ctagsx/issues"
+    "url": "https://github.com/xin2233/ctagsx-c-cpp/issues"
   },
-  "homepage": "https://github.com/jtanx/ctagsx",
+  "homepage": "https://github.com/xin2233/ctagsx-c-cpp",
   "categories": [
     "Other"
   ],
@@ -28,40 +28,40 @@
   "contributes": {
     "configuration": {
       "type": "object",
-      "title": "ctagsx configuration",
+      "title": "ctagsc configuration",
       "properties": {
-        "ctagsx.openAsPreview": {
+        "ctagsc.openAsPreview": {
           "type": "boolean",
           "default": false,
           "description": "Open navigated to files in preview mode"
         },
-        "ctagsx.disableDefinitionProvider": {
+        "ctagsc.disableDefinitionProvider": {
           "type": "boolean",
           "default": false,
-          "description": "Disable ctagsx from providing symbol definitions to VSCode's in-built definition navigator"
+          "description": "Disable ctagsc from providing symbol definitions to VSCode's in-built definition navigator"
         }
       }
     },
     "commands": [
       {
         "command": "extension.findCTags",
-        "title": "ctagsx: Navigate to definition"
+        "title": "ctagsc: Navigate to definition"
       },
       {
         "command": "extension.findCTagsPrompt",
-        "title": "ctagsx: Search for definition"
+        "title": "ctagsc: Search for definition"
       },
       {
         "command": "extension.ctagsJumpBack",
-        "title": "ctagsx: Jump back to previous location from navigation"
+        "title": "ctagsc: Jump back to previous location from navigation"
       },
       {
         "command": "extension.ctagsClearJumpStack",
-        "title": "ctagsx: Clear navigation history"
+        "title": "ctagsc: Clear navigation history"
       },
       {
         "command": "extension.createTerminal",
-        "title": "ctagsx: Create a terminal in the workspace of the active document"
+        "title": "ctagsc: Create a terminal in the workspace of the active document"
       }
     ],
     "keybindings": [
@@ -90,7 +90,7 @@
   "devDependencies": {
     "@types/mocha": "^2.2.48",
     "@types/node": "^6.14.3",
-    "@types/vscode": "^1.63.2",
+    "@types/vscode": "^1.42.2",
     "@vscode/test-electron": "^2.1.1",
     "eslint": "^8.8.0",
     "mocha": "^9.2.0",
