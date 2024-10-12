@@ -4,7 +4,7 @@ const path = require('path')
 const Promise = require('bluebird')
 const vscode = require('vscode')
 const eachLine = Promise.promisify(lineReader.eachLine)  // 将line-reader的eachLine函数转化为Promise版本
-// const { exec } = require('child_process')
+const child_process = require('child_process');
 // const { couldStartTrivia } = require('typescript')
 
 // Called when the plugin is first activated
@@ -31,8 +31,8 @@ function activate(context) {
     context.subscriptions.push(disposable)
 
     // 添加命令，用于执行生成ctags命令
-    // disposable = vscode.commands.registerCommand('extension.genCtags', () => generateCTags)
-    // context.subscriptions.push(disposable)
+    disposable = vscode.commands.registerCommand('extension.genCtag', generateCTags)
+    context.subscriptions.push(disposable)
 
     // 检查是否禁用了定义提供程序
     if (!vscode.workspace.getConfiguration('ctagsc').get('disableDefinitionProvider')) {
@@ -50,38 +50,60 @@ function deactivate() {
 }
 exports.deactivate = deactivate
 
-// function generateCTags() {
-//     // 获取当前工作区
-//     const workspaceFolder = vscode.workspace.workspaceFolders[0];
-//     if (!workspaceFolder) {
-//         vscode.window.showErrorMessage('No workspace folder found.');
-//         return;
-//     }
+/**
+ * 重新生成 ctags
+ * @returns Promise,  resolve : stdout, reject : error
+ */
+function doGenerate() {
+    const config = vscode.workspace.getConfiguration('ctagsc');
+    const command = config.get('genCtagCommand');
+    if (vscode.workspace.workspaceFolders) {
+        // 获取当前路径
+        const workspacePath = vscode.workspace.workspaceFolders[0].uri.fsPath.replace(/\\/g, '/'); // 替换为正斜杠, 获取第一个工作区文件夹路径
 
-//     // 获取当前工作区的根路径
-//     const rootPath = workspaceFolder.uri.fsPath;
+        console.log(`Running ctagsc command: ${command}`);
+        console.log(`workspacePath pwd :  ${workspacePath}`);
+        return new Promise((resolve, reject) => {
+            child_process.exec(command || 'ctags --tag-relative --extras=+f -R .', { cwd: workspacePath }, (error, stdout, stderr) => {
+                if (error) {
+                    console.error(`exec error: ${error}`);
+                    reject(error);
+                } else if (stderr) {
+                    console.error(`stderr: ${stderr}`);
+                    resolve(stderr);
+                } else {
+                    // no error occur
+                    resolve(stdout);
+                }
+            });
+        });
+    } else {
+        return Promise.reject('未打开任何工作区文件夹');
+    }
+}
 
-//     // 执行 shell 命令
-//     let command
-//     if (os.platform() === 'win32') {
-//         // Windows 系统的命令
-//         command = 'ctags.exe --tag-relative --extra=f -R .';
-//     } else {
-//         // Linux 和 macOS 系统的命令
-//         command = 'ctags --tag-relative --extra=f -R .';
-//     }
-//     // const command = `ctags --tag-relative --extras=+f -R .`;
-//     exec(command, { cwd: rootPath }, (error, stdout, stderr) => {
-//         if (error) {
-//             vscode.window.showErrorMessage(`Error running ctags: `, error.message);
-//             return;
-//         }
-//         if (stderr) {
-//             vscode.window.showWarningMessage(`Warning running ctags: `, stderr);
-//         }
-//         vscode.window.showInformationMessage(`ctags completed successfully.`);
-//     });
-// }
+/**
+ * 
+ * @returns     
+ */
+function generateCTags() {
+    // withProgress 方法用于显示进度条
+    return vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Window,
+            title: 'Generating CTags...'
+        },
+        (progress, token) => {
+            return doGenerate()
+                .catch(err => {
+                    /**
+                     * Promise的catch方法用于捕获Promise被拒绝（rejected）的情况，即当Promise的状态变为rejected时，catch方法会被调用。
+                     */
+                    vscode.window.setStatusBarMessage('Generating CTags failed: ' + err);
+                });
+        }
+    );
+}
 
 function createTerminal() {
     vscode.window.createTerminal().show()
@@ -359,7 +381,7 @@ async function getLineNumberPattern(entry, canceller) {
     let found = 0; // 如果找到了，就 = true
     let lineNumber = 0; // 遍历文件的行数
     let charPos = 0;
-    const found_lines = []; // 存放找到的行
+    const foundLines = []; // 存放找到的行
     const foundCharPos = []; // 存放找到的字符位置
 
     /* 是用await声明的Promise异步返回，必须“等待”到有返回值的时候，代码才继续执行下去，
@@ -370,7 +392,7 @@ async function getLineNumberPattern(entry, canceller) {
             found = true;
             charPos = Math.max(line.indexOf(entry.name), 0);
             console.log(`ctags: Found '${pattern}' at ${lineNumber}:${charPos}`);
-            found_lines.push(lineNumber);  // 存放找到的行
+            foundLines.push(lineNumber);  // 存放找到的行
             foundCharPos.push(charPos);  // 存放找到的字符位置
         } else if (canceller && canceller.isCancellationRequested) {
             console.log('ctags: Cancelled pattern searching')
@@ -381,25 +403,25 @@ async function getLineNumberPattern(entry, canceller) {
         // 存放找到的tag在这个文件的vscode.Selection
         const selections = []
         // 判断存放的行数是否为0
-        if (found_lines.length === 0) {
+        if (foundLines.length === 0) {
             // 此时代码有是逻辑错误
-            console.log('ctags: Error: found_lines.length === 0');
+            console.log('ctags: Error: foundLines.length === 0');
             // 如果为0,则显示一个提示框，告诉用户没有找到
             vscode.window.showInformationMessage(`ctags: No match found for '${pattern}'`);
         }
         else {
             // 如果找到的entry 大于1，则每个entry都返回一个selection
-
-            /*
-            map() 方法创建一个新数组，其结果是该数组中的每个元素是调用一次提供的函数后的返回值。
-            array.map((item,index,arr)=>{
-                //item是操作的当前元素
-                //index是操作元素的下表
-                //arr是需要被操作的元素
-                //具体需要哪些参数 就传入那个
-            })
-            */
-            found_lines.map((line, index) => {
+            
+            /**
+             * map() 方法创建一个新数组，其结果是该数组中的每个元素是调用一次提供的函数后的返回值。
+             * array.map((item,index,arr)=>{
+             *   //item是操作的当前元素
+             *   //index是操作元素的下表
+             *   //arr是需要被操作的元素
+             *   //具体需要哪些参数 就传入那个
+             * })
+             */
+            foundLines.map((line, index) => {
                 console.log(`c: Found '${pattern}' at ${line}:${foundCharPos[index]}`);
                 selections.push(new vscode.Selection(line - 1, foundCharPos[index], line - 1, foundCharPos[index]))
             })

@@ -39,6 +39,16 @@
           "type": "boolean",
           "default": false,
           "description": "Disable ctagsc from providing symbol definitions to VSCode's in-built definition navigator"
+        },
+        "ctagsc.genCtagCommand": {
+          "type": "string",
+          "default": "ctags --tag-relative --extras=+f -R .",
+          "description": "Command to generate ctags file"
+        },
+        "ctagsc.ctagsPath": {
+          "type": "string",
+          "default": "ctags",
+          "description": "Path to ctags executable"
         }
       }
     },
@@ -62,6 +72,10 @@
       {
         "command": "extension.createTerminal",
         "title": "ctagsc: Create a terminal in the workspace of the active document"
+      },
+      {
+        "command": "extension.genCtag",
+        "title": "ctagsc: Generate Ctags file"
       }
     ],
     "keybindings": [
