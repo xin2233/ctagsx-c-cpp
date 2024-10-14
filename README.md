@@ -1,11 +1,13 @@
 # ctagsc README
 This a modification version from [ctagsx](https://github.com/jtanx/ctagsx). Best for c++ and c.
 
-This is original README.md: [README.md](./README-origin.md)
+This is original README.md: [README.md](./README-ctagsx.md)
 
 ## Features
 - [√]fix : If the navigated-to line contains multiple occurrences of the tag name, the cursor is only placed at the first occurrence
 - [√]fix: when ctrl + click, the cursor is placed at the first occurrence of the tag name, and at this time the click is not done, but the goto definition is executed.
+- Add genCTags command to generate tags file
+
 
 ## Usage
 | Command | Description | keyboard shortcut |
@@ -16,7 +18,7 @@ This is original README.md: [README.md](./README-origin.md)
 | `ctagsc.createTerminal` | Create a terminal in the workspace of the active document | `Ctrl+Shift+T`/`Cmd+Shift+T` |
 | `ctagsc.findCTagsFromPrompt` | Search for a tag in the tags file from a prompt |  |
 | `ctagsc.findCTagsInDocument` | Search for a tag in the active document | |
-| `ctagsc.generateTags` | Generate a tags file for the active document |  |
+| `ctagsc.generateCTags` | Generate a tags file for the active document |  |
 
 ## Setup
 ctagsc requires a tags file to work. This may be generated using [Exuberant Ctags](http://ctags.sourceforge.net). To generate the tags file, a suggested run is:

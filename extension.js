@@ -31,7 +31,7 @@ function activate(context) {
     context.subscriptions.push(disposable)
 
     // 添加命令，用于执行生成ctags命令
-    disposable = vscode.commands.registerCommand('extension.genCtag', generateCTags)
+    disposable = vscode.commands.registerCommand('extension.generateCTags', generateCTags)
     context.subscriptions.push(disposable)
 
     // 检查是否禁用了定义提供程序
@@ -56,7 +56,7 @@ exports.deactivate = deactivate
  */
 function doGenerate() {
     const config = vscode.workspace.getConfiguration('ctagsc');
-    const command = config.get('genCtagCommand');
+    const command = config.get('generateCTagsCommand');
     if (vscode.workspace.workspaceFolders) {
         // 获取当前路径
         const workspacePath = vscode.workspace.workspaceFolders[0].uri.fsPath.replace(/\\/g, '/'); // 替换为正斜杠, 获取第一个工作区文件夹路径
@@ -70,7 +70,7 @@ function doGenerate() {
                     reject(error);
                 } else if (stderr) {
                     console.error(`stderr: ${stderr}`);
-                    resolve(stderr);
+                    reject(stderr);
                 } else {
                     // no error occur
                     resolve(stdout);
@@ -99,7 +99,9 @@ function generateCTags() {
                     /**
                      * Promise的catch方法用于捕获Promise被拒绝（rejected）的情况，即当Promise的状态变为rejected时，catch方法会被调用。
                      */
-                    vscode.window.setStatusBarMessage('Generating CTags failed: ' + err);
+                    vscode.window.setStatusBarMessage('Generating CTags failed!!');
+                    // 换行打印
+                    vscode.window.showErrorMessage(`Generating CTags failed: ${err}`);
                 });
         }
     );
@@ -411,7 +413,7 @@ async function getLineNumberPattern(entry, canceller) {
         }
         else {
             // 如果找到的entry 大于1，则每个entry都返回一个selection
-            
+
             /**
              * map() 方法创建一个新数组，其结果是该数组中的每个元素是调用一次提供的函数后的返回值。
              * array.map((item,index,arr)=>{

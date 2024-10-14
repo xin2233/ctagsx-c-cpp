@@ -2,7 +2,7 @@
   "name": "ctagsc",
   "displayName": "ctagsc",
   "description": "A fast, cross-platform and working ctags implementation",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "zxc",
   "icon": "img/logo.png",
   "engines": {
@@ -40,9 +40,9 @@
           "default": false,
           "description": "Disable ctagsc from providing symbol definitions to VSCode's in-built definition navigator"
         },
-        "ctagsc.genCtagCommand": {
+        "ctagsc.generateCTagsCommand": {
           "type": "string",
-          "default": "ctags --tag-relative --extras=+f -R .",
+          "default": "ctags --tag-relative --extra=f -R .",
           "description": "Command to generate ctags file"
         },
         "ctagsc.ctagsPath": {
@@ -74,7 +74,7 @@
         "title": "ctagsc: Create a terminal in the workspace of the active document"
       },
       {
-        "command": "extension.genCtag",
+        "command": "extension.generateCTags",
         "title": "ctagsc: Generate Ctags file"
       }
     ],
