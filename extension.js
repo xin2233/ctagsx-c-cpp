@@ -380,7 +380,6 @@ async function getLineNumberPattern(entry, canceller) {
         matchWhole = true
     }
 
-    let found = 0; // 如果找到了，就 = true
     let lineNumber = 0; // 遍历文件的行数
     let charPos = 0;
     const foundLines = []; // 存放找到的行
@@ -391,7 +390,6 @@ async function getLineNumberPattern(entry, canceller) {
     await eachLine(entry.file, line => {
         lineNumber += 1;
         if ((matchWhole && line === pattern) || line.startsWith(pattern)) {
-            found = true;
             charPos = Math.max(line.indexOf(entry.name), 0);
             console.log(`ctags: Found '${pattern}' at ${lineNumber}:${charPos}`);
             foundLines.push(lineNumber);  // 存放找到的行
@@ -401,37 +399,37 @@ async function getLineNumberPattern(entry, canceller) {
             return false  // 实际上返回的是promise.reject， 直接退出了promise 状态
         }
     })
-    if (found) { // 找到了
-        // 存放找到的tag在这个文件的vscode.Selection
-        const selections = []
-        // 判断存放的行数是否为0
-        if (foundLines.length === 0) {
-            // 此时代码有是逻辑错误
-            console.log('ctags: Error: foundLines.length === 0');
-            // 如果为0,则显示一个提示框，告诉用户没有找到
-            vscode.window.showInformationMessage(`ctags: No match found for '${pattern}'`);
-        }
-        else {
-            // 如果找到的entry 大于1，则每个entry都返回一个selection
 
-            /**
-             * map() 方法创建一个新数组，其结果是该数组中的每个元素是调用一次提供的函数后的返回值。
-             * array.map((item,index,arr)=>{
-             *   //item是操作的当前元素
-             *   //index是操作元素的下表
-             *   //arr是需要被操作的元素
-             *   //具体需要哪些参数 就传入那个
-             * })
-             */
-            foundLines.map((line, index) => {
-                console.log(`c: Found '${pattern}' at ${line}:${foundCharPos[index]}`);
-                selections.push(new vscode.Selection(line - 1, foundCharPos[index], line - 1, foundCharPos[index]))
-            })
-            console.log(`c: getLineNumberPattern selections : `, selections);
-        }
+    /* 上面的 each 这个promise执行完之后，才会执行下面的代码 */
 
-        return selections
+    // 存放找到的tag在这个文件的vscode.Selection
+    const selections = []
+    // 判断存放的行数是否为0
+    if (foundLines.length === 0) {
+        // 此时代码有是逻辑错误
+        console.log('ctags: Error: foundLines.length === 0');
+        // 如果为0,则显示一个提示框，告诉用户没有找到
+        vscode.window.showInformationMessage(`ctags: No match found for '${pattern}'`);
+    } else {
+        /* 如果找到的entry 大于1，则每个entry都返回一个selection */
+
+        /**
+         * map() 方法创建一个新数组，其结果是该数组中的每个元素是调用一次提供的函数后的返回值。
+         * array.map((item,index,arr)=>{
+         *   //item是操作的当前元素
+         *   //index是操作元素的下表
+         *   //arr是需要被操作的元素
+         *   //具体需要哪些参数 就传入那个
+         * })
+         */
+        foundLines.map((line, index) => {
+            console.log(`c: Found '${pattern}' at ${line}:${foundCharPos[index]}`);
+            selections.push(new vscode.Selection(line - 1, foundCharPos[index], line - 1, foundCharPos[index]))
+        })
+        console.log(`c: getLineNumberPattern selections : `, selections);
     }
+
+    return selections
 }
 
 

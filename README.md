@@ -31,3 +31,6 @@ ctags --tag-relative --extras=+f -R .
 * `ctagsc.openAsPreview`: Controls if the navigated file will be opened in preview mode (default: `false`)
 * `ctagsc.disableDefinitionProvider`: Setting this to true prevents ctagsc from providing definitions via this interface (default: `false`).
 
+## Attenion
+- This extension will conflict witn `cscope-code` extension.
+
