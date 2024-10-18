@@ -32,5 +32,5 @@ ctags --tag-relative --extras=+f -R .
 * `ctagsc.disableDefinitionProvider`: Setting this to true prevents ctagsc from providing definitions via this interface (default: `false`).
 
 ## Attenion
-- This extension will conflict witn `cscope-code` extension.
+- This extension will conflict with `cscope-code` extension.
 
