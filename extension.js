@@ -265,6 +265,7 @@ function provideDefinition(document, position, canceller) {
 
             const results = []
             // 遍历每个标签
+            /* Promise.each : https://www.cnblogs.com/zjxcyr/p/18475204 */
             return Promise.each(options, item => {
                 // 如果取消请求被触发
                 if (canceller.isCancellationRequested) {
@@ -283,6 +284,7 @@ function provideDefinition(document, position, canceller) {
                         }
                     })
             }).then(() => {
+                /* promise.each 都遍历结束了，才会进一次 */
                 // 返回结果
                 return results
             })
