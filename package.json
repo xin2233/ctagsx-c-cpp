@@ -3,7 +3,7 @@
   "displayName": "ctagsc",
   "description": "A fast, cross-platform and working ctags implementation",
   "version": "1.0.2",
-  "publisher": "zxc",
+  "publisher": "Superxin",
   "icon": "img/logo.png",
   "engines": {
     "vscode": "^1.42.2"
@@ -12,7 +12,7 @@
     "type": "git",
     "url": "git+https://github.com/xin2233/ctagsx-c-cpp.git"
   },
-  "author": "ZXC",
+  "author": "Superxin",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/xin2233/ctagsx-c-cpp/issues"
@@ -111,6 +111,7 @@
     "typescript": "^2.9.2"
   },
   "dependencies": {
+    "@vscode/vsce": "^3.2.1",
     "ctagz": "^0.1.0",
     "line-reader": "^0.4.0"
   }
