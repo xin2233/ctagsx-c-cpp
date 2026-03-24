@@ -1,4 +1,5 @@
-import * as ctagz from 'ctagz'
+﻿// import * as ctagz from 'ctagz'
+import { CTagEntry as ParsedCTagEntry, findCTagsBSearch } from './ctags'
 import * as path from 'path'
 import * as vscode from 'vscode'
 import * as child_process from 'child_process'
@@ -11,18 +12,10 @@ interface JumpPosition {
     charPos: number
 }
 
-interface CTagEntry {
-    file: string
-    name: string
-    tagKind?: string
-    kind?: string
-    description?: string
-    label?: string
-    detail?: string
-    address: {
-        pattern?: string
-        lineNumber: number
-    }
+type CTagEntry = ParsedCTagEntry
+
+interface CTagQuickPickItem extends vscode.QuickPickItem {
+    entry: CTagEntry
 }
 
 // Called when the plugin is first activated
@@ -58,8 +51,30 @@ export function deactivate(): void {
     console.log('ctagsc is deactivated')
 }
 
+function resolveCTagEntry(entry: ParsedCTagEntry, tagsFile: string): CTagEntry {
+    const resolvedFile = path.isAbsolute(entry.file)
+        ? entry.file
+        : path.join(path.dirname(tagsFile), entry.file)
+
+    return {
+        ...entry,
+        file: resolvedFile
+    }
+}
+
+function toQuickPickEntry(entry: ParsedCTagEntry, tagsFile: string): CTagQuickPickItem {
+    const resolvedEntry = resolveCTagEntry(entry, tagsFile)
+
+    return {
+        entry: resolvedEntry,
+        label: resolvedEntry.file,
+        description: resolvedEntry.kind || '',
+        detail: resolvedEntry.address.pattern || 'Line ' + resolvedEntry.address.lineNumber
+    }
+}
+
 /**
- * 重新生成 ctags
+ * Regenerate ctags
  */
 function doGenerate(): Promise<string> {
     const config = vscode.workspace.getConfiguration('ctagsc')
@@ -82,7 +97,7 @@ function doGenerate(): Promise<string> {
             })
         })
     } else {
-        return Promise.reject('未打开任何工作区文件夹')
+        return Promise.reject('No workspace folder is open')
     }
 }
 
@@ -106,41 +121,37 @@ function createTerminal(): void {
     vscode.window.createTerminal().show()
 }
 
-function findCTagsFromPrompt(context: vscode.ExtensionContext): Thenable<void> {
+async function findCTagsFromPrompt(context: vscode.ExtensionContext): Promise<void> {
     const options: vscode.InputBoxOptions = {
         prompt: 'Enter a tag to search for'
+    };
+    const tag = await vscode.window.showInputBox(options);
+    if (!tag) {
+        return;
     }
-    return vscode.window.showInputBox(options)
-        .then(tag => {
-            if (!tag) {
-                return
-            }
-            return findCTags(context, tag)
-        })
+    await findCTags(context, tag);
 }
-
 /**
  * Find ctags for a tag in the current document, CTRL+T
  */
-function findCTagsInDocument(context: vscode.ExtensionContext): void {
-    const editor = vscode.window.activeTextEditor
+async function findCTagsInDocument(context: vscode.ExtensionContext): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
     if (!editor) {
-        console.log('ctags: Cannot search - no active editor (file too large? https://github.com/Microsoft/vscode/issues/3147)')
-        return
+        console.log('ctags: Cannot search - no active editor');
+        return;
     }
 
-    const tag = getTag(editor)
+    const tag = getTag(editor);
     if (!tag) {
-        return
+        return;
     }
 
-    findCTags(context, tag)
+    await findCTags(context, tag);
 }
-
 /**
  * Find ctags for a tag, CTRL+T
  */
-function findCTags(context: vscode.ExtensionContext, tag: string): void {
+async function findCTags(context: vscode.ExtensionContext, tag: string): Promise<void>  {
     const editor = vscode.window.activeTextEditor
     let searchPath: string | undefined = vscode.workspace.rootPath
 
@@ -161,45 +172,45 @@ function findCTags(context: vscode.ExtensionContext, tag: string): void {
         return
     }
 
-    ctagz.findCTagsBSearch(searchPath, tag)
-        .then((result: any) => {
-            const options: CTagEntry[] = result.results.map((t: CTagEntry) => {
-                if (!path.isAbsolute(t.file)) {
-                    t.file = path.join(path.dirname(result.tagsFile), t.file)
-                }
-                t.tagKind = t.kind
-                t.description = t.tagKind || ''
-                t.label = t.file
-                t.detail = t.address.pattern || `Line ${t.address.lineNumber}`
-                console.log(`tag :`, t)
-                delete t.kind // #20 -> avoid conflict with QuickPickItem
-                return t
-            })
+    try {
+        const result = await findCTagsBSearch(searchPath, tag)
+        const options: CTagQuickPickItem[] = result.results.map(entry => {
+            const option = toQuickPickEntry(entry, result.tagsFile)
+            console.log('tag :', option)
+            return option
+        })
 
-            if (!options.length) {
-                if (!result.tagsFile) {
-                    return vscode.window.showWarningMessage(`ctags: No tags file found`)
-                }
-                return vscode.window.showInformationMessage(`ctags: No tags found for ${tag}`)
-            } else if (options.length === 1) {
-                return revealCTags(context, editor, options[0])
+        if (!options.length) {
+            if (!result.tagsFile) {
+                vscode.window.showWarningMessage(`ctags: No tags file found`);
             } else {
-                return vscode.window.showQuickPick(options as any)
-                    .then((opt: any) => revealCTags(context, editor, opt))
+                vscode.window.showInformationMessage(`ctags: No tags found for ${tag}`);
             }
-        })
-        .catch((err: any) => {
-            console.log(err.stack)
-            vscode.window.showErrorMessage(`ctags: Search failed: ${err}`)
-        })
+            return;
+        } else if (options.length === 1) {
+            await revealCTags(context, editor, options[0].entry);
+        } else {
+            const opt = await vscode.window.showQuickPick(options);
+            if (opt) {
+                await revealCTags(context, editor, opt.entry);
+            }
+        }
+    } catch (err) {
+        if (err instanceof Error) {
+            console.log(err.stack);
+        } else {
+            console.log(err);
+        }
+        vscode.window.showErrorMessage(`ctags: Search failed: ${err}`);
+    }
 }
 
 /**
- * 提供定义函数
+ * 鎻愪緵瀹氫箟鍑芥暟
  */
 async function provideDefinition(
-    document: vscode.TextDocument, 
-    position: vscode.Position, 
+    document: vscode.TextDocument,
+    position: vscode.Position,
     canceller: vscode.CancellationToken
 ): Promise<vscode.Location[]> {
     if (document.isUntitled || document.uri.scheme !== 'file') {
@@ -230,28 +241,20 @@ async function provideDefinition(
     }
 
     try {
-        // 使用ctagz模块查找标签
-        const result: any = await ctagz.findCTagsBSearch(document.fileName, tag)
-        // 将结果中的标签转换为vscode.Location对象
-        const options: CTagEntry[] = result.results.map((tag: CTagEntry) => {
-            // 如果标签文件路径不是绝对路径，则转换为绝对路径
-            if (!path.isAbsolute(tag.file)) {
-                tag.file = path.join(path.dirname(result.tagsFile), tag.file)
-            }
-            tag.tagKind = tag.kind
-            delete tag.kind
-            return tag
-        })
+        // 浣跨敤ctagz妯″潡鏌ユ壘鏍囩
+        const result = await findCTagsBSearch(document.fileName, tag)
+        // 灏嗙粨鏋滀腑鐨勬爣绛捐浆鎹负vscode.Location瀵硅薄
+        const options: CTagEntry[] = result.results.map(entry => resolveCTagEntry(entry, result.tagsFile))
 
         const results: vscode.Location[] = []
-        // 遍历每个标签
+        // 閬嶅巻姣忎釜鏍囩
         for (const item of options) {
             if (canceller.isCancellationRequested) {
-                // 如果取消请求被触发，提前返回空数组
+                // 濡傛灉鍙栨秷璇锋眰琚Е鍙戯紝鎻愬墠杩斿洖绌烘暟缁?
                 break
             }
-            // 获取标签在文档中的位置，可能有多个位置，都添加到结果中
-            // await 关键字会等待 getLineNumber 返回的 Promise 完成，并解析出该 Promise 的结果。因此，selections 不再是 Promise，而是 getLineNumber 实际返回的值（比如 vscode.Selection[] 类型）。换句话说，await 帮你“解开”了 Promise 的包装。
+            // 鑾峰彇鏍囩鍦ㄦ枃妗ｄ腑鐨勪綅缃紝鍙兘鏈夊涓綅缃紝閮芥坊鍔犲埌缁撴灉涓?
+            // await 鍏抽敭瀛椾細绛夊緟 getLineNumber 杩斿洖鐨?Promise 瀹屾垚锛屽苟瑙ｆ瀽鍑鸿 Promise 鐨勭粨鏋溿€傚洜姝わ紝selections 涓嶅啀鏄?Promise锛岃€屾槸 getLineNumber 瀹為檯杩斿洖鐨勫€硷紙姣斿 vscode.Selection[] 绫诲瀷锛夈€傛崲鍙ヨ瘽璇达紝await 甯綘鈥滆В寮€鈥濅簡 Promise 鐨勫寘瑁呫€?
             const selections = await getLineNumber(item, document, range as vscode.Selection, canceller)
             if (Array.isArray(selections)) {
                 selections.forEach(sel => {
@@ -265,9 +268,14 @@ async function provideDefinition(
         return results
 
     } catch (err) {
-        console.log(err.stack)
+        // console.log(err.stack)
+        if (err instanceof Error) {
+            console.log(err.stack);
+        } else {
+            console.log(err);
+        }
         vscode.window.showErrorMessage(`ctags: Search failed: ${err}`)
-        return undefined; // 或返回 []
+        return [];
     }
 }
 
@@ -292,10 +300,10 @@ function clearJumpStack(context: vscode.ExtensionContext): Thenable<void> {
 }
 
 /**
- * 保存当前编辑器的位置
+ * 淇濆瓨褰撳墠缂栬緫鍣ㄧ殑浣嶇疆
  */
 function saveState(
-    context: vscode.ExtensionContext, 
+    context: vscode.ExtensionContext,
     editor: vscode.TextEditor | undefined
 ): Thenable<void> {
     if (!editor) {
@@ -334,10 +342,10 @@ function getTag(editor: vscode.TextEditor): string {
 }
 
 /**
- * tags中没有行号，则根据选中的pattern来查询具体的行号
+ * tags涓病鏈夎鍙凤紝鍒欐牴鎹€変腑鐨刾attern鏉ユ煡璇㈠叿浣撶殑琛屽彿
  */
 async function getLineNumberPattern(
-    entry: CTagEntry, 
+    entry: CTagEntry,
     canceller: vscode.CancellationToken | undefined
 ): Promise<vscode.Selection[]> {
     let matchWhole = false
@@ -395,10 +403,10 @@ async function getLineNumberPattern(
 }
 
 /**
- * 获取文件行号
+ * 鑾峰彇鏂囦欢琛屽彿
  */
 function getFileLineNumber(
-    document: vscode.TextDocument, 
+    document: vscode.TextDocument,
     sel: vscode.Selection
 ): Promise<vscode.Selection[] | undefined> {
     const selections: vscode.Selection[] = []
@@ -427,16 +435,16 @@ function getFileLineNumber(
 }
 
 /**
- * 获取条目的行号
+ * 鑾峰彇鏉＄洰鐨勮鍙?
  */
 async function getLineNumber(
-    entry: CTagEntry, 
-    document: vscode.TextDocument | null, 
+    entry: CTagEntry,
+    document: vscode.TextDocument | null,
     sel: vscode.Selection, canceller?: vscode.CancellationToken
 ): Promise<vscode.Selection[]> {
     if (entry.address.lineNumber === 0) {
         return getLineNumberPattern(entry, canceller)
-    } else if (entry.tagKind === 'F' && document) {
+    } else if (entry.kind === 'F' && document) {
         return getFileLineNumber(document, sel).then(r => r || [])
     }
 
@@ -445,7 +453,7 @@ async function getLineNumber(
 }
 
 /**
- * 打开并显示指定的文档和选择
+ * 鎵撳紑骞舵樉绀烘寚瀹氱殑鏂囨。鍜岄€夋嫨
  */
 async function openAndReveal(
     context: vscode.ExtensionContext,
@@ -470,13 +478,13 @@ async function openAndReveal(
 }
 
 /**
- * 显示CTags条目, CTRL+T
+ * 鏄剧ずCTags鏉＄洰, CTRL+T
  */
 async function revealCTags(
     context: vscode.ExtensionContext,
     editor: vscode.TextEditor | undefined,
     entry: CTagEntry
-): Promise<vscode.TextEditor | undefined> | undefined {
+): Promise<vscode.TextEditor | undefined> {
     if (!entry) {
         return
     }
@@ -509,3 +517,5 @@ async function revealCTags(
             }
         })
 }
+
+

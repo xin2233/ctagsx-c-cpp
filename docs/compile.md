@@ -38,3 +38,16 @@ then, `npm config set registry https://registry.npmmirror.com`
 ```
 npm run compile
 ```
+
+### how to package
+```
+rm -rf node_modules package-lock.json
+npm install # install lib
+
+## when ts
+npm run compile # compile ts to js
+
+# package
+vsce package
+# check .vsix file size
+```
