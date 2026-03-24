@@ -1,11 +1,9 @@
 import * as ctagz from 'ctagz'
-import * as lineReader from 'line-reader'
 import * as path from 'path'
-import Bluebird = require('bluebird')
 import * as vscode from 'vscode'
 import * as child_process from 'child_process'
-
-const eachLine = Bluebird.promisify(lineReader.eachLine) as (file: string, cb: (line: string) => boolean | void) => Bluebird<void>
+import * as fs from 'fs'
+import * as readline from 'readline'
 
 interface JumpPosition {
     uri: string
@@ -63,14 +61,14 @@ export function deactivate(): void {
 /**
  * 重新生成 ctags
  */
-function doGenerate(): Bluebird<string> {
+function doGenerate(): Promise<string> {
     const config = vscode.workspace.getConfiguration('ctagsc')
     const command = config.get<string>('generateCTagsCommand')
     if (vscode.workspace.workspaceFolders) {
         const workspacePath = vscode.workspace.workspaceFolders[0].uri.fsPath.replace(/\\/g, '/')
         console.log(`Running ctagsc command: ${command}`)
         console.log(`workspacePath pwd :  ${workspacePath}`)
-        return new Bluebird<string>((resolve, reject) => {
+        return new Promise<string>((resolve, reject) => {
             child_process.exec(command || 'ctags --tag-relative --extras=+f -R .', { cwd: workspacePath }, (error, stdout, stderr) => {
                 if (error) {
                     console.error(`exec error: ${error}`)
@@ -84,7 +82,7 @@ function doGenerate(): Bluebird<string> {
             })
         })
     } else {
-        return Bluebird.reject('未打开任何工作区文件夹')
+        return Promise.reject('未打开任何工作区文件夹')
     }
 }
 
@@ -199,14 +197,14 @@ function findCTags(context: vscode.ExtensionContext, tag: string): void {
 /**
  * 提供定义函数
  */
-function provideDefinition(
-    document: vscode.TextDocument,
-    position: vscode.Position,
+async function provideDefinition(
+    document: vscode.TextDocument, 
+    position: vscode.Position, 
     canceller: vscode.CancellationToken
-): Bluebird<vscode.Location[]> {
+): Promise<vscode.Location[]> {
     if (document.isUntitled || document.uri.scheme !== 'file') {
         console.log('ctags: Cannot provide definitions for untitled (unsaved) and/or non-local (non file://) documents')
-        return Bluebird.reject(new Error('untitled or non-local document'))
+        return Promise.reject(new Error('untitled or non-local document'))
     }
 
     let tag: string | undefined
@@ -222,45 +220,55 @@ function provideDefinition(
         range = document.getWordRangeAtPosition(position)
         if (!range) {
             console.log('ctags: Cannot provide definition without a valid tag (word range)')
-            return Bluebird.reject(new Error('no word range'))
+            return Promise.reject(new Error('no word range'))
         }
         tag = document.getText(range)
         if (!tag) {
             console.log('ctags: Cannot provide definition with an empty tag')
-            return Bluebird.reject(new Error('empty tag'))
+            return Promise.reject(new Error('empty tag'))
         }
     }
 
-    return ctagz.findCTagsBSearch(document.fileName, tag)
-        .then((result: any) => {
-            const options: CTagEntry[] = result.results.map((t: CTagEntry) => {
-                if (!path.isAbsolute(t.file)) {
-                    t.file = path.join(path.dirname(result.tagsFile), t.file)
-                }
-                t.tagKind = t.kind
-                delete t.kind
-                return t
-            })
+    try {
+        // 使用ctagz模块查找标签
+        const result: any = await ctagz.findCTagsBSearch(document.fileName, tag)
+        // 将结果中的标签转换为vscode.Location对象
+        const options: CTagEntry[] = result.results.map((tag: CTagEntry) => {
+            // 如果标签文件路径不是绝对路径，则转换为绝对路径
+            if (!path.isAbsolute(tag.file)) {
+                tag.file = path.join(path.dirname(result.tagsFile), tag.file)
+            }
+            tag.tagKind = tag.kind
+            delete tag.kind
+            return tag
+        })
 
-            const results: vscode.Location[] = []
-            return Bluebird.each(options, (item: CTagEntry) => {
-                if (canceller.isCancellationRequested) {
-                    return
-                }
-                return getLineNumber(item, document, range as vscode.Selection, canceller)
-                    .then((selections: vscode.Selection[]) => {
-                        if (Array.isArray(selections)) {
-                            selections.forEach(sel => {
-                                console.log(`provideDefinitio - sel:\n`, sel)
-                                results.push(new vscode.Location(vscode.Uri.file(item.file), sel.start))
-                            })
-                        }
-                    })
-            }).then(() => results)
-        })
-        .catch((err: any) => {
-            console.log(err.stack)
-        })
+        const results: vscode.Location[] = []
+        // 遍历每个标签
+        for (const item of options) {
+            if (canceller.isCancellationRequested) {
+                // 如果取消请求被触发，提前返回空数组
+                break
+            }
+            // 获取标签在文档中的位置，可能有多个位置，都添加到结果中
+            // await 关键字会等待 getLineNumber 返回的 Promise 完成，并解析出该 Promise 的结果。因此，selections 不再是 Promise，而是 getLineNumber 实际返回的值（比如 vscode.Selection[] 类型）。换句话说，await 帮你“解开”了 Promise 的包装。
+            const selections = await getLineNumber(item, document, range as vscode.Selection, canceller)
+            if (Array.isArray(selections)) {
+                selections.forEach(sel => {
+                    console.log(`provideDefinitio - sel:\n`, sel)
+                    results.push(new vscode.Location(vscode.Uri.file(item.file), sel.start))
+                })
+            }
+        }
+
+
+        return results
+
+    } catch (err) {
+        console.log(err.stack)
+        vscode.window.showErrorMessage(`ctags: Search failed: ${err}`)
+        return undefined; // 或返回 []
+    }
 }
 
 /**
@@ -286,9 +294,12 @@ function clearJumpStack(context: vscode.ExtensionContext): Thenable<void> {
 /**
  * 保存当前编辑器的位置
  */
-function saveState(context: vscode.ExtensionContext, editor: vscode.TextEditor | undefined): Thenable<void> {
+function saveState(
+    context: vscode.ExtensionContext, 
+    editor: vscode.TextEditor | undefined
+): Thenable<void> {
     if (!editor) {
-        return Bluebird.resolve()
+        return Promise.resolve()
     }
     const currentPosition: JumpPosition = {
         uri: editor.document.uri.toString(),
@@ -300,7 +311,7 @@ function saveState(context: vscode.ExtensionContext, editor: vscode.TextEditor |
     if (stack.length > 0) {
         const lastPosition = stack[stack.length - 1]
         if (lastPosition.uri === currentPosition.uri && lastPosition.lineNumber === currentPosition.lineNumber) {
-            return Bluebird.resolve()
+            return Promise.resolve()
         } else if (stack.length > 50) {
             stack.shift()
         }
@@ -325,7 +336,10 @@ function getTag(editor: vscode.TextEditor): string {
 /**
  * tags中没有行号，则根据选中的pattern来查询具体的行号
  */
-async function getLineNumberPattern(entry: CTagEntry, canceller: vscode.CancellationToken | undefined): Promise<vscode.Selection[]> {
+async function getLineNumberPattern(
+    entry: CTagEntry, 
+    canceller: vscode.CancellationToken | undefined
+): Promise<vscode.Selection[]> {
     let matchWhole = false
     let pattern = entry.address.pattern!
     if (pattern.startsWith('^')) {
@@ -345,17 +359,24 @@ async function getLineNumberPattern(entry: CTagEntry, canceller: vscode.Cancella
     const foundLines: number[] = []
     const foundCharPos: number[] = []
 
-    await eachLine(entry.file, (line: string) => {
-        lineNumber += 1
-        if ((matchWhole && line === pattern) || line.startsWith(pattern)) {
-            charPos = Math.max(line.indexOf(entry.name), 0)
-            console.log(`ctags: Found '${pattern}' at ${lineNumber}:${charPos}`)
-            foundLines.push(lineNumber)
-            foundCharPos.push(charPos)
-        } else if (canceller && canceller.isCancellationRequested) {
-            console.log('ctags: Cancelled pattern searching')
-            return false
-        }
+    await new Promise<void>((resolve) => {
+        const rl = readline.createInterface({
+            input: fs.createReadStream(entry.file),
+            crlfDelay: Infinity
+        })
+        rl.on('line', (line: string) => {
+            lineNumber += 1
+            if ((matchWhole && line === pattern) || line.startsWith(pattern)) {
+                charPos = Math.max(line.indexOf(entry.name), 0)
+                console.log(`ctags: Found '${pattern}' at ${lineNumber}:${charPos}`)
+                foundLines.push(lineNumber)
+                foundCharPos.push(charPos)
+            } else if (canceller && canceller.isCancellationRequested) {
+                console.log('ctags: Cancelled pattern searching')
+                rl.close()
+            }
+        })
+        rl.on('close', resolve)
     })
 
     const selections: vscode.Selection[] = []
@@ -376,7 +397,10 @@ async function getLineNumberPattern(entry: CTagEntry, canceller: vscode.Cancella
 /**
  * 获取文件行号
  */
-function getFileLineNumber(document: vscode.TextDocument, sel: vscode.Selection): Bluebird<vscode.Selection[] | undefined> {
+function getFileLineNumber(
+    document: vscode.TextDocument, 
+    sel: vscode.Selection
+): Promise<vscode.Selection[] | undefined> {
     const selections: vscode.Selection[] = []
     let pos = sel.end.translate(0, 1)
     let range = document.getWordRangeAtPosition(pos)
@@ -396,20 +420,19 @@ function getFileLineNumber(document: vscode.TextDocument, sel: vscode.Selection)
             }
             console.log(`ctags: Resolved file position to line ${lineNumber + 1}, char ${charPos + 1}`)
             selections.push(new vscode.Selection(lineNumber, charPos, lineNumber, charPos))
-            return Bluebird.resolve(selections)
+            return Promise.resolve(selections)
         }
     }
-    return Bluebird.resolve(undefined)
+    return Promise.resolve(undefined)
 }
 
 /**
  * 获取条目的行号
  */
-function getLineNumber(
-    entry: CTagEntry,
-    document: vscode.TextDocument | null,
-    sel: vscode.Selection,
-    canceller?: vscode.CancellationToken
+async function getLineNumber(
+    entry: CTagEntry, 
+    document: vscode.TextDocument | null, 
+    sel: vscode.Selection, canceller?: vscode.CancellationToken
 ): Promise<vscode.Selection[]> {
     if (entry.address.lineNumber === 0) {
         return getLineNumberPattern(entry, canceller)
@@ -418,19 +441,19 @@ function getLineNumber(
     }
 
     const lineNumber = Math.max(0, entry.address.lineNumber - 1)
-    return Bluebird.resolve([new vscode.Selection(lineNumber, 0, lineNumber, 0)])
+    return Promise.resolve([new vscode.Selection(lineNumber, 0, lineNumber, 0)])
 }
 
 /**
  * 打开并显示指定的文档和选择
  */
-function openAndReveal(
+async function openAndReveal(
     context: vscode.ExtensionContext,
     editor: vscode.TextEditor | undefined,
     document: vscode.Uri | string,
     sel: vscode.Selection,
     doSaveState?: boolean
-): Thenable<vscode.TextEditor> {
+): Promise<vscode.TextEditor> {
     if (doSaveState) {
         return saveState(context, editor)
             .then(() => openAndReveal(context, editor, document, sel))
@@ -449,11 +472,11 @@ function openAndReveal(
 /**
  * 显示CTags条目, CTRL+T
  */
-function revealCTags(
+async function revealCTags(
     context: vscode.ExtensionContext,
     editor: vscode.TextEditor | undefined,
     entry: CTagEntry
-): Thenable<vscode.TextEditor | undefined> | undefined {
+): Promise<vscode.TextEditor | undefined> | undefined {
     if (!entry) {
         return
     }

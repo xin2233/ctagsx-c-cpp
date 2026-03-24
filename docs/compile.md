@@ -33,3 +33,8 @@ Verify the installation:
 
 - if, Response timeout while trying to fetch https://registry.npmjs.org/generator-code (over 30000ms)
 then, `npm config set registry https://registry.npmmirror.com`
+
+### ts version, how to run 
+```
+npm run compile
+```
