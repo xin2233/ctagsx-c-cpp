@@ -5,3 +5,10 @@ test/**
 jsconfig.json
 vsc-extension-quickstart.md
 .eslintrc.json
+
+# 排除 node_modules 中的无关内容，但保留依赖代码
+node_modules/.bin
+node_modules/*/test
+node_modules/*/docs
+**/*.ts
+**/*.map
