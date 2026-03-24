@@ -1,7 +1,7 @@
 # ctagsc README
 This a modification version from [ctagsx](https://github.com/jtanx/ctagsx). Best for c++ and c.
 
-This is original README.md: [README.md](./README-ctagsx.md)
+This is original README.md: [README.md](./docs/README-old-ctagsx.md)
 
 ## Features
 - [√]fix : If the navigated-to line contains multiple occurrences of the tag name, the cursor is only placed at the first occurrence

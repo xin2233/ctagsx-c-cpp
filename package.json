@@ -42,7 +42,7 @@
         },
         "ctagsc.generateCTagsCommand": {
           "type": "string",
-          "default": "ctags --tag-relative --extra=f -R .",
+          "default": "ctags --tag-relative --extras=+f -R .",
           "description": "Command to generate ctags file"
         },
         "ctagsc.ctagsPath": {
