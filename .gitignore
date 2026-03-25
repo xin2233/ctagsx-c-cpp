@@ -2,3 +2,5 @@ node_modules
 .vscode-*
 *.vsix
 .vscode
+# out is committed so the extension works without a build step
+out

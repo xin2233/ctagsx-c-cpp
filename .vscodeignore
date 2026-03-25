@@ -1,10 +1,12 @@
 .vscode/**
 .vscode-test/**
-test/**
+src/**
 .gitignore
-jsconfig.json
+tsconfig.json
 vsc-extension-quickstart.md
 .eslintrc.json
+
+docs/
 
 # 排除 node_modules 中的无关内容，但保留依赖代码
 node_modules/.bin

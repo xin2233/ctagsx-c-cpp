@@ -1,5 +1,8 @@
 # Change Log
 
+## [1.0.3]
+- 升级到ts版本
+
 ## [1.0.2] -2026-3-24
 - 增加一个ctrl + shift +p 选择 extension.generateCTags，可以自动生成ctag，快捷键的命令可以在setting里自定义修改
 
