@@ -151,7 +151,7 @@ async function findCTagsInDocument(context: vscode.ExtensionContext): Promise<vo
 /**
  * Find ctags for a tag, CTRL+T
  */
-async function findCTags(context: vscode.ExtensionContext, tag: string): Promise<void>  {
+async function findCTags(context: vscode.ExtensionContext, tag: string): Promise<void> {
     const editor = vscode.window.activeTextEditor
     let searchPath: string | undefined = vscode.workspace.rootPath
 
@@ -206,7 +206,19 @@ async function findCTags(context: vscode.ExtensionContext, tag: string): Promise
 }
 
 /**
- * 鎻愪緵瀹氫箟鍑芥暟
+ * Provides the definition locations for a symbol at the given position in a VSCode document.
+ *
+ * This function attempts to resolve the symbol (tag) at the specified position, using either the current selection
+ * or the word under the cursor. It then searches for matching tags using ctags, and maps the results to
+ * `vscode.Location` objects, which can be used by VSCode to navigate to the symbol's definition(s).
+ *
+ * If the document is untitled or not a local file, or if no valid tag can be determined, the function rejects with an error.
+ * If the search is cancelled via the provided `CancellationToken`, the function returns early with any results found so far.
+ *
+ * @param document - The VSCode text document in which to provide definitions.
+ * @param position - The position in the document where the definition is requested.
+ * @param canceller - A cancellation token that can be used to cancel the operation.
+ * @returns A promise that resolves to an array of `vscode.Location` objects representing the definition locations.
  */
 async function provideDefinition(
     document: vscode.TextDocument,
@@ -241,20 +253,14 @@ async function provideDefinition(
     }
 
     try {
-        // 浣跨敤ctagz妯″潡鏌ユ壘鏍囩
         const result = await findCTagsBSearch(document.fileName, tag)
-        // 灏嗙粨鏋滀腑鐨勬爣绛捐浆鎹负vscode.Location瀵硅薄
         const options: CTagEntry[] = result.results.map(entry => resolveCTagEntry(entry, result.tagsFile))
 
         const results: vscode.Location[] = []
-        // 閬嶅巻姣忎釜鏍囩
         for (const item of options) {
             if (canceller.isCancellationRequested) {
-                // 濡傛灉鍙栨秷璇锋眰琚Е鍙戯紝鎻愬墠杩斿洖绌烘暟缁?
                 break
             }
-            // 鑾峰彇鏍囩鍦ㄦ枃妗ｄ腑鐨勪綅缃紝鍙兘鏈夊涓綅缃紝閮芥坊鍔犲埌缁撴灉涓?
-            // await 鍏抽敭瀛椾細绛夊緟 getLineNumber 杩斿洖鐨?Promise 瀹屾垚锛屽苟瑙ｆ瀽鍑鸿 Promise 鐨勭粨鏋溿€傚洜姝わ紝selections 涓嶅啀鏄?Promise锛岃€屾槸 getLineNumber 瀹為檯杩斿洖鐨勫€硷紙姣斿 vscode.Selection[] 绫诲瀷锛夈€傛崲鍙ヨ瘽璇达紝await 甯綘鈥滆В寮€鈥濅簡 Promise 鐨勫寘瑁呫€?
             const selections = await getLineNumber(item, document, range as vscode.Selection, canceller)
             if (Array.isArray(selections)) {
                 selections.forEach(sel => {
@@ -300,7 +306,17 @@ function clearJumpStack(context: vscode.ExtensionContext): Thenable<void> {
 }
 
 /**
- * 淇濆瓨褰撳墠缂栬緫鍣ㄧ殑浣嶇疆
+ * Saves the current cursor position (jump position) of the active editor into a stack
+ * stored in the extension's workspace state. This stack is used to track navigation history.
+ *
+ * - If the editor is undefined, the function resolves immediately.
+ * - If the current position matches the last saved position, it does not add a duplicate.
+ * - Maintains a maximum stack size of 50 by removing the oldest entry when necessary.
+ * - Updates the 'CTAGSC_JUMP_STACK' key in the workspace state with the new stack.
+ *
+ * @param context The extension context providing access to workspace state.
+ * @param editor The active text editor whose position should be saved, or undefined.
+ * @returns A promise that resolves when the state has been updated.
  */
 function saveState(
     context: vscode.ExtensionContext,
@@ -342,7 +358,17 @@ function getTag(editor: vscode.TextEditor): string {
 }
 
 /**
- * tags涓病鏈夎鍙凤紝鍒欐牴鎹€変腑鐨刾attern鏉ユ煡璇㈠叿浣撶殑琛屽彿
+ * Searches for lines in a file that match a given pattern from a CTagEntry and returns their positions as VSCode selections.
+ *
+ * The function reads the file line by line, looking for lines that match the specified pattern. If the pattern starts with '^', it is treated as a line start anchor.
+ * If the pattern ends with '$', it is treated as a line end anchor, and the match must be exact for the whole line.
+ * For each matching line, the function determines the character position of the entry name and creates a `vscode.Selection` at that position.
+ * If no matches are found, an information message is shown to the user.
+ * The search can be cancelled using the provided cancellation token.
+ *
+ * @param entry - The CTagEntry containing the file path, pattern, and symbol name to search for.
+ * @param canceller - An optional VSCode cancellation token to allow aborting the search.
+ * @returns A promise that resolves to an array of `vscode.Selection` objects representing the positions of matches in the file.
  */
 async function getLineNumberPattern(
     entry: CTagEntry,
@@ -403,7 +429,18 @@ async function getLineNumberPattern(
 }
 
 /**
- * 鑾峰彇鏂囦欢琛屽彿
+ * Attempts to resolve a file position (line and character) from the text following the given selection.
+ * 
+ * This function looks for two consecutive numbers after the end of the selection:
+ * - The first number is interpreted as the line number (1-based, converted to 0-based).
+ * - The second number, if present, is interpreted as the character position (1-based, converted to 0-based).
+ * 
+ * If both numbers are found, returns a `vscode.Selection` at the resolved position.
+ * If not, returns `undefined`.
+ * 
+ * @param document - The active text document in which to search for the numbers.
+ * @param sel - The current selection whose end position is used as the starting point for searching.
+ * @returns A promise resolving to an array of `vscode.Selection` with the resolved position, or `undefined` if not found.
  */
 function getFileLineNumber(
     document: vscode.TextDocument,
@@ -434,8 +471,19 @@ function getFileLineNumber(
     return Promise.resolve(undefined)
 }
 
+
 /**
- * 鑾峰彇鏉＄洰鐨勮鍙?
+ * Retrieves the selection(s) corresponding to the line number of a given tag entry.
+ *
+ * If the entry's line number is zero, attempts to determine the line number using a pattern-based approach.
+ * If the entry represents a function ('F') and a document is provided, attempts to determine the line number within the file.
+ * Otherwise, returns a selection at the specified line number (adjusted to zero-based indexing).
+ *
+ * @param entry - The tag entry containing address and kind information.
+ * @param document - The VSCode text document, if available.
+ * @param sel - The current selection in the document.
+ * @param canceller - Optional cancellation token to support cancellation.
+ * @returns A promise resolving to an array of VSCode selections corresponding to the determined line number(s).
  */
 async function getLineNumber(
     entry: CTagEntry,
@@ -443,17 +491,27 @@ async function getLineNumber(
     sel: vscode.Selection, canceller?: vscode.CancellationToken
 ): Promise<vscode.Selection[]> {
     if (entry.address.lineNumber === 0) {
+        // 表示 ctags 条目没有直接提供行号
         return getLineNumberPattern(entry, canceller)
     } else if (entry.kind === 'F' && document) {
+        // 如果条目类型是函数（entry.kind === 'F'）且提供了文档对象
         return getFileLineNumber(document, sel).then(r => r || [])
     }
-
+    // 否则，直接使用 ctags 提供的行号（调整为零基索引）
     const lineNumber = Math.max(0, entry.address.lineNumber - 1)
     return Promise.resolve([new vscode.Selection(lineNumber, 0, lineNumber, 0)])
 }
 
 /**
- * 鎵撳紑骞舵樉绀烘寚瀹氱殑鏂囨。鍜岄€夋嫨
+ * Opens a text document in the editor and reveals the specified selection.
+ * Optionally saves the current editor state before opening the document.
+ *
+ * @param context - The extension context used for state management.
+ * @param editor - The current text editor, or undefined if none is active.
+ * @param document - The URI or string path of the document to open.
+ * @param sel - The selection to reveal in the opened document.
+ * @param doSaveState - If true, saves the current editor state before opening the document.
+ * @returns A promise that resolves to the opened and revealed TextEditor.
  */
 async function openAndReveal(
     context: vscode.ExtensionContext,
@@ -477,8 +535,17 @@ async function openAndReveal(
         })
 }
 
+
 /**
- * 鏄剧ずCTags鏉＄洰, CTRL+T
+ * Reveals the location(s) of a given CTag entry in the editor.
+ *
+ * If multiple locations are found, presents a QuickPick for the user to select which location to navigate to.
+ * If only one location is found, navigates directly to that location.
+ *
+ * @param context - The extension context used for resource management.
+ * @param editor - The current active text editor, or undefined if none is active.
+ * @param entry - The CTag entry to reveal in the editor.
+ * @returns A promise that resolves to the updated TextEditor if navigation occurs, or undefined otherwise.
  */
 async function revealCTags(
     context: vscode.ExtensionContext,
