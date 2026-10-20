@@ -394,10 +394,15 @@ async function getLineNumberPattern(
     const foundCharPos: number[] = []
 
     await new Promise<void>((resolve) => {
+        const fileStream = fs.createReadStream(entry.file)
         const rl = readline.createInterface({
-            input: fs.createReadStream(entry.file),
+            input: fileStream,
             crlfDelay: Infinity
         })
+        const stop = () => {
+            rl.close()
+            fileStream.destroy()
+        }
         rl.on('line', (line: string) => {
             lineNumber += 1
             if ((matchWhole && line === pattern) || line.startsWith(pattern)) {
@@ -407,8 +412,12 @@ async function getLineNumberPattern(
                 foundCharPos.push(charPos)
             } else if (canceller && canceller.isCancellationRequested) {
                 console.log('ctags: Cancelled pattern searching')
-                rl.close()
+                stop()
             }
+        })
+        rl.on('error', () => {
+            stop()
+            resolve()
         })
         rl.on('close', resolve)
     })
