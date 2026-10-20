@@ -79,9 +79,14 @@ function toQuickPickEntry(entry: ParsedCTagEntry, tagsFile: string): CTagQuickPi
 function doGenerate(): Promise<string> {
     const config = vscode.workspace.getConfiguration('ctagsc')
     const command = config.get<string>('generateCTagsCommand')
-    if (vscode.workspace.workspaceFolders) {
-        const workspacePath = vscode.workspace.workspaceFolders[0].uri.fsPath.replace(/\\/g, '/')
-        console.log(`Running ctagsc command: ${command}`)
+    const folders = vscode.workspace.workspaceFolders
+    if (!folders || folders.length === 0) {
+        return Promise.reject('No workspace folder is open')
+    }
+    console.log(`Running ctagsc command: ${command}`)
+    // 多根工作区：为每个根各生成一次 tags（--tag-relative 下各根的 tags 文件互不干扰）
+    const runs = folders.map(folder => {
+        const workspacePath = folder.uri.fsPath.replace(/\\/g, '/')
         console.log(`workspacePath pwd :  ${workspacePath}`)
         return new Promise<string>((resolve, reject) => {
             child_process.exec(command || 'ctags --tag-relative --extras=+f -R .', { cwd: workspacePath }, (error, stdout, stderr) => {
@@ -96,9 +101,8 @@ function doGenerate(): Promise<string> {
                 }
             })
         })
-    } else {
-        return Promise.reject('No workspace folder is open')
-    }
+    })
+    return Promise.all(runs).then(outputs => outputs.join('\n'))
 }
 
 function generateCTags(): Thenable<void> {
@@ -149,11 +153,23 @@ async function findCTagsInDocument(context: vscode.ExtensionContext): Promise<vo
     await findCTags(context, tag);
 }
 /**
+ * 获取工作区根路径。
+ * 优先使用新版 API workspaceFolders；极老版本 VSCode 没有 workspaceFolders 时回退到已废弃的 rootPath。
+ */
+function getWorkspaceRootPath(): string | undefined {
+    const folders = vscode.workspace.workspaceFolders
+    if (folders && folders.length > 0) {
+        return folders[0].uri.fsPath
+    }
+    return (vscode.workspace as { rootPath?: string }).rootPath
+}
+
+/**
  * Find ctags for a tag, CTRL+T
  */
 async function findCTags(context: vscode.ExtensionContext, tag: string): Promise<void> {
     const editor = vscode.window.activeTextEditor
-    let searchPath: string | undefined = vscode.workspace.rootPath
+    let searchPath: string | undefined = getWorkspaceRootPath()
 
     if (editor && !editor.document.isUntitled && editor.document.uri.scheme === 'file') {
         searchPath = editor.document.fileName
@@ -167,7 +183,7 @@ async function findCTags(context: vscode.ExtensionContext, tag: string): Promise
         } else {
             console.log('ctags: Active text editor is undefined')
         }
-        console.log('ctags: Workspace root: ', vscode.workspace.rootPath)
+        console.log('ctags: Workspace root: ', getWorkspaceRootPath())
         vscode.window.showWarningMessage(`ctags: No searchable path (no workspace folder open?)`)
         return
     }
@@ -212,7 +228,7 @@ async function findCTags(context: vscode.ExtensionContext, tag: string): Promise
  * or the word under the cursor. It then searches for matching tags using ctags, and maps the results to
  * `vscode.Location` objects, which can be used by VSCode to navigate to the symbol's definition(s).
  *
- * If the document is untitled or not a local file, or if no valid tag can be determined, the function rejects with an error.
+ * If the document is untitled or not a local file, or if no valid tag can be determined, the function returns an empty array.
  * If the search is cancelled via the provided `CancellationToken`, the function returns early with any results found so far.
  *
  * @param document - The VSCode text document in which to provide definitions.
@@ -227,7 +243,7 @@ async function provideDefinition(
 ): Promise<vscode.Location[]> {
     if (document.isUntitled || document.uri.scheme !== 'file') {
         console.log('ctags: Cannot provide definitions for untitled (unsaved) and/or non-local (non file://) documents')
-        return Promise.reject(new Error('untitled or non-local document'))
+        return []
     }
 
     let tag: string | undefined
@@ -243,12 +259,12 @@ async function provideDefinition(
         range = document.getWordRangeAtPosition(position)
         if (!range) {
             console.log('ctags: Cannot provide definition without a valid tag (word range)')
-            return Promise.reject(new Error('no word range'))
+            return []
         }
         tag = document.getText(range)
         if (!tag) {
             console.log('ctags: Cannot provide definition with an empty tag')
-            return Promise.reject(new Error('empty tag'))
+            return []
         }
     }
 
@@ -257,19 +273,42 @@ async function provideDefinition(
         const options: CTagEntry[] = result.results.map(entry => resolveCTagEntry(entry, result.tagsFile))
 
         const results: vscode.Location[] = []
+        // 按目标文件分组 pattern 类条目（无行号），每个文件只读取一次
+        const patternGroups = new Map<string, CTagEntry[]>()
+        const selectionsByEntry = new Map<CTagEntry, vscode.Selection[]>()
+
         for (const item of options) {
             if (canceller.isCancellationRequested) {
                 break
             }
-            const selections = await getLineNumber(item, document, range as vscode.Selection, canceller)
-            if (Array.isArray(selections)) {
-                selections.forEach(sel => {
-                    console.log(`provideDefinitio - sel:\n`, sel)
-                    results.push(new vscode.Location(vscode.Uri.file(item.file), sel.start))
-                })
+            if (item.address.lineNumber === 0) {
+                const group = patternGroups.get(item.file)
+                if (group) {
+                    group.push(item)
+                } else {
+                    patternGroups.set(item.file, [item])
+                }
+            } else if (item.kind === 'F' && document) {
+                selectionsByEntry.set(item, (await getFileLineNumber(document, range as vscode.Selection)) || [])
+            } else {
+                const lineNumber = Math.max(0, item.address.lineNumber - 1)
+                selectionsByEntry.set(item, [new vscode.Selection(lineNumber, 0, lineNumber, 0)])
             }
         }
 
+        for (const [file, group] of patternGroups) {
+            const lines = await readFileLines(file)
+            for (const item of group) {
+                selectionsByEntry.set(item, matchEntryInLines(item, lines))
+            }
+        }
+
+        for (const item of options) {
+            const selections = selectionsByEntry.get(item) || []
+            selections.forEach(sel => {
+                results.push(new vscode.Location(vscode.Uri.file(item.file), sel.start))
+            })
+        }
 
         return results
 
@@ -358,43 +397,12 @@ function getTag(editor: vscode.TextEditor): string {
 }
 
 /**
- * Searches for lines in a file that match a given pattern from a CTagEntry and returns their positions as VSCode selections.
- *
- * The function reads the file line by line, looking for lines that match the specified pattern. If the pattern starts with '^', it is treated as a line start anchor.
- * If the pattern ends with '$', it is treated as a line end anchor, and the match must be exact for the whole line.
- * For each matching line, the function determines the character position of the entry name and creates a `vscode.Selection` at that position.
- * If no matches are found, an information message is shown to the user.
- * The search can be cancelled using the provided cancellation token.
- *
- * @param entry - The CTagEntry containing the file path, pattern, and symbol name to search for.
- * @param canceller - An optional VSCode cancellation token to allow aborting the search.
- * @returns A promise that resolves to an array of `vscode.Selection` objects representing the positions of matches in the file.
+ * 一次性读取整个文件的行列表（流式，出错时销毁底层文件流）
  */
-async function getLineNumberPattern(
-    entry: CTagEntry,
-    canceller: vscode.CancellationToken | undefined
-): Promise<vscode.Selection[]> {
-    let matchWhole = false
-    let pattern = entry.address.pattern!
-    if (pattern.startsWith('^')) {
-        pattern = pattern.substring(1, pattern.length)
-    } else {
-        console.error(`ctags: Unsupported pattern ${pattern}`)
-        return []
-    }
-
-    if (pattern.endsWith('$')) {
-        pattern = pattern.substring(0, pattern.length - 1)
-        matchWhole = true
-    }
-
-    let lineNumber = 0
-    let charPos = 0
-    const foundLines: number[] = []
-    const foundCharPos: number[] = []
-
+async function readFileLines(file: string): Promise<string[]> {
+    const lines: string[] = []
     await new Promise<void>((resolve) => {
-        const fileStream = fs.createReadStream(entry.file)
+        const fileStream = fs.createReadStream(file)
         const rl = readline.createInterface({
             input: fileStream,
             crlfDelay: Infinity
@@ -404,16 +412,7 @@ async function getLineNumberPattern(
             fileStream.destroy()
         }
         rl.on('line', (line: string) => {
-            lineNumber += 1
-            if ((matchWhole && line === pattern) || line.startsWith(pattern)) {
-                charPos = Math.max(line.indexOf(entry.name), 0)
-                console.log(`ctags: Found '${pattern}' at ${lineNumber}:${charPos}`)
-                foundLines.push(lineNumber)
-                foundCharPos.push(charPos)
-            } else if (canceller && canceller.isCancellationRequested) {
-                console.log('ctags: Cancelled pattern searching')
-                stop()
-            }
+            lines.push(line)
         })
         rl.on('error', () => {
             stop()
@@ -421,20 +420,54 @@ async function getLineNumberPattern(
         })
         rl.on('close', resolve)
     })
+    return lines
+}
 
-    const selections: vscode.Selection[] = []
-    if (foundLines.length === 0) {
-        console.log('ctags: Error: foundLines.length === 0')
-        vscode.window.showInformationMessage(`ctags: No match found for '${pattern}'`)
-    } else {
-        foundLines.forEach((line, index) => {
-            console.log(`c: Found '${pattern}' at ${line}:${foundCharPos[index]}`)
-            selections.push(new vscode.Selection(line - 1, foundCharPos[index], line - 1, foundCharPos[index]))
-        })
-        console.log(`c: getLineNumberPattern selections : `, selections)
+/**
+ * 在已读取的行列表中匹配单个 tag 条目的 pattern，返回对应的选区
+ */
+function matchEntryInLines(entry: CTagEntry, lines: string[]): vscode.Selection[] {
+    let pattern = entry.address.pattern || ''
+    if (!pattern.startsWith('^')) {
+        console.error(`ctags: Unsupported pattern ${pattern}`)
+        return []
+    }
+    pattern = pattern.substring(1, pattern.length)
+    let matchWhole = false
+    if (pattern.endsWith('$')) {
+        pattern = pattern.substring(0, pattern.length - 1)
+        matchWhole = true
     }
 
+    const selections: vscode.Selection[] = []
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        if ((matchWhole && line === pattern) || line.startsWith(pattern)) {
+            const charPos = Math.max(line.indexOf(entry.name), 0)
+            console.log(`ctags: Found '${pattern}' at ${i + 1}:${charPos}`)
+            selections.push(new vscode.Selection(i, charPos, i, charPos))
+        }
+    }
+
+    if (selections.length === 0) {
+        console.log('ctags: Error: no matching lines')
+        vscode.window.showInformationMessage(`ctags: No match found for '${pattern}'`)
+    }
     return selections
+}
+
+/**
+ * 在条目目标文件中按 pattern 查找匹配行，返回对应的选区。
+ * 实际读取与匹配逻辑在 readFileLines / matchEntryInLines 中；
+ * canceller 参数已不再使用（读取为一次性完成），保留以兼容原调用签名。
+ */
+async function getLineNumberPattern(
+    entry: CTagEntry,
+    canceller: vscode.CancellationToken | undefined
+): Promise<vscode.Selection[]> {
+    void canceller
+    const lines = await readFileLines(entry.file)
+    return matchEntryInLines(entry, lines)
 }
 
 /**
